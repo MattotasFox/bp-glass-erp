@@ -21,7 +21,10 @@ import {
 import { useMaquinas, useEmpleados, useInventario, useOrdenes, costoOrden, type OrdenCompleta } from "@/lib/datos";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { fecha, money, hoyISO } from "@/lib/format";
+import { fecha, money, hoyISO, etiquetaTipoOrden, tonoTipoOrden, calcularHoras } from "@/lib/format";
+import type { Database } from "@/integrations/supabase/types";
+
+type TipoOrden = Database["public"]["Enums"]["tipo_orden"];
 
 export const Route = createFileRoute("/_authenticated/ordenes")({
   head: () => ({
@@ -39,7 +42,7 @@ export const Route = createFileRoute("/_authenticated/ordenes")({
 
 const nuevaVacia = {
   maquina_id: "",
-  tipo: "preventiva",
+  tipo: "preventiva_diaria" as TipoOrden,
   fecha_programada: hoyISO(),
   tecnico_id: "",
   descripcion: "",
@@ -47,6 +50,7 @@ const nuevaVacia = {
 
 function Ordenes() {
   const { esAdmin, esTecnico } = useAuth();
+  const puedeCrear = esAdmin;
   const puedeEditar = esAdmin || esTecnico;
   const { data: ordenes = [], isLoading } = useOrdenes();
   const { data: maquinas = [] } = useMaquinas();
@@ -58,7 +62,12 @@ function Ordenes() {
   const [filtro, setFiltro] = useState("todas");
   const [nueva, setNueva] = useState<typeof nuevaVacia | null>(null);
   const [cierre, setCierre] = useState<OrdenCompleta | null>(null);
-  const [cierreForm, setCierreForm] = useState({ fecha_ejecucion: hoyISO(), horas: "0", observaciones: "" });
+  const [cierreForm, setCierreForm] = useState({
+    fecha_ejecucion: hoyISO(),
+    hora_inicio: "",
+    hora_termino: "",
+    observaciones: "",
+  });
   const [consumos, setConsumos] = useState<{ insumo_id: string; cantidad: string }[]>([]);
 
   const lista = useMemo(() => {
@@ -79,7 +88,7 @@ function Ordenes() {
       const { data: userData } = await supabase.auth.getUser();
       const { error } = await supabase.from("ordenes_trabajo").insert({
         maquina_id: nueva.maquina_id,
-        tipo: nueva.tipo as "preventiva",
+        tipo: nueva.tipo,
         fecha_programada: nueva.fecha_programada,
         tecnico_id: nueva.tecnico_id || null,
         descripcion: nueva.descripcion || null,
@@ -111,6 +120,12 @@ function Ordenes() {
   const cerrarOrden = useMutation({
     mutationFn: async () => {
       if (!cierre) return;
+      if (!cierreForm.hora_inicio || !cierreForm.hora_termino) {
+        throw new Error("Ingresa la hora de inicio y término");
+      }
+      if (hayErroresConsumos) {
+        throw new Error("Revisa las cantidades de repuestos: hay valores inválidos");
+      }
       const filas = consumos
         .filter((c) => c.insumo_id && Number(c.cantidad) > 0)
         .map((c) => ({ orden_id: cierre.id, insumo_id: c.insumo_id, cantidad_usada: Number(c.cantidad) }));
@@ -123,7 +138,8 @@ function Ordenes() {
         .update({
           estado: "completada",
           fecha_ejecucion: cierreForm.fecha_ejecucion,
-          horas_mano_obra: Number(cierreForm.horas || 0),
+          hora_inicio: cierreForm.hora_inicio,
+          hora_termino: cierreForm.hora_termino,
           observaciones: cierreForm.observaciones || null,
         })
         .eq("id", cierre.id);
@@ -141,17 +157,43 @@ function Ordenes() {
 
   function abrirCierre(o: OrdenCompleta) {
     setCierre(o);
-    setCierreForm({ fecha_ejecucion: hoyISO(), horas: String(o.horas_mano_obra ?? 0), observaciones: o.observaciones ?? "" });
+    setCierreForm({
+      fecha_ejecucion: hoyISO(),
+      hora_inicio: o.hora_inicio ?? "",
+      hora_termino: o.hora_termino ?? "",
+      observaciones: o.observaciones ?? "",
+    });
     setConsumos([]);
   }
+
+  const horasCierre = calcularHoras(cierreForm.hora_inicio, cierreForm.hora_termino);
+
+  // Repuestos que exceden el stock disponible o tienen cantidad inválida (sumando
+  // repeticiones del mismo repuesto en la lista de consumos).
+  const erroresConsumos = useMemo(() => {
+    const totalesPorInsumo = new Map<string, number>();
+    for (const c of consumos) {
+      if (!c.insumo_id) continue;
+      totalesPorInsumo.set(c.insumo_id, (totalesPorInsumo.get(c.insumo_id) ?? 0) + Number(c.cantidad || 0));
+    }
+    return consumos.map((c) => {
+      if (!c.insumo_id) return null;
+      const cantidad = Number(c.cantidad || 0);
+      if (!Number.isFinite(cantidad) || cantidad <= 0) return "La cantidad debe ser mayor a cero";
+      const disponible = Number(insumos.find((i) => i.id === c.insumo_id)?.stock_actual ?? 0);
+      if ((totalesPorInsumo.get(c.insumo_id) ?? 0) > disponible) return `Supera el stock disponible (${disponible})`;
+      return null;
+    });
+  }, [consumos, insumos]);
+
+  const hayErroresConsumos = erroresConsumos.some((e) => e !== null);
 
   const totalCierre =
     consumos.reduce((s, c) => {
       const ins = insumos.find((i) => i.id === c.insumo_id);
       return s + Number(c.cantidad || 0) * Number(ins?.costo_unitario ?? 0);
     }, 0) +
-    Number(cierreForm.horas || 0) *
-      Number(empleados.find((e) => e.id === cierre?.tecnico_id)?.tarifa_hora ?? 0);
+    horasCierre * Number(empleados.find((e) => e.id === cierre?.tecnico_id)?.tarifa_hora ?? 0);
 
   return (
     <AppShell
@@ -171,7 +213,7 @@ function Ordenes() {
             <option value="completada">Completada</option>
             <option value="cancelada">Cancelada</option>
           </select>
-          {puedeEditar ? <BotonPrincipal onClick={() => setNueva({ ...nuevaVacia })}>Nueva orden</BotonPrincipal> : null}
+          {puedeCrear ? <BotonPrincipal onClick={() => setNueva({ ...nuevaVacia })}>Nueva orden</BotonPrincipal> : null}
         </>
       }
     >
@@ -198,9 +240,7 @@ function Ordenes() {
                   <div className="font-mono text-[11px] text-muted-foreground">{o.maquinas?.codigo ?? ""}</div>
                 </td>
                 <td className="px-5 py-3">
-                  <Pastilla tono={o.tipo === "preventiva" ? "ok" : "clay"}>
-                    {o.tipo === "preventiva" ? "Preventiva" : "Correctiva"}
-                  </Pastilla>
+                  <Pastilla tono={tonoTipoOrden(o.tipo)}>{etiquetaTipoOrden(o.tipo)}</Pastilla>
                 </td>
                 <td className="px-5 py-3 text-muted-foreground">{fecha(o.fecha_programada)}</td>
                 <td className="px-5 py-3 text-muted-foreground">{o.empleados?.nombre ?? "Sin asignar"}</td>
@@ -257,8 +297,12 @@ function Ordenes() {
             </Campo>
             <div className="grid grid-cols-2 gap-3">
               <Campo label="Tipo">
-                <Seleccion value={nueva.tipo} onChange={(e) => setNueva({ ...nueva, tipo: e.target.value })}>
-                  <option value="preventiva">Preventiva</option>
+                <Seleccion
+                  value={nueva.tipo}
+                  onChange={(e) => setNueva({ ...nueva, tipo: e.target.value as TipoOrden })}
+                >
+                  <option value="preventiva_diaria">Preventiva diaria</option>
+                  <option value="preventiva_mensual">Preventiva mensual</option>
                   <option value="correctiva">Correctiva</option>
                 </Seleccion>
               </Campo>
@@ -297,7 +341,16 @@ function Ordenes() {
               <span className="font-medium">{money(totalCierre)}</span>
             </div>
             <div className="flex gap-2">
-              <BotonPrincipal className="flex-1" disabled={cerrarOrden.isPending} onClick={() => cerrarOrden.mutate()}>
+              <BotonPrincipal
+                className="flex-1"
+                disabled={
+                  cerrarOrden.isPending ||
+                  !cierreForm.hora_inicio ||
+                  !cierreForm.hora_termino ||
+                  hayErroresConsumos
+                }
+                onClick={() => cerrarOrden.mutate()}
+              >
                 Cerrar orden
               </BotonPrincipal>
               {cierre && esAdmin ? (
@@ -314,65 +367,86 @@ function Ordenes() {
           </div>
         }
       >
+        <Campo label="Fecha de ejecución">
+          <Entrada
+            type="date"
+            value={cierreForm.fecha_ejecucion}
+            onChange={(e) => setCierreForm({ ...cierreForm, fecha_ejecucion: e.target.value })}
+          />
+        </Campo>
         <div className="grid grid-cols-2 gap-3">
-          <Campo label="Fecha de ejecución">
+          <Campo label="Hora de inicio">
             <Entrada
-              type="date"
-              value={cierreForm.fecha_ejecucion}
-              onChange={(e) => setCierreForm({ ...cierreForm, fecha_ejecucion: e.target.value })}
+              type="time"
+              value={cierreForm.hora_inicio}
+              onChange={(e) => setCierreForm({ ...cierreForm, hora_inicio: e.target.value })}
             />
           </Campo>
-          <Campo label="Horas de mano de obra">
+          <Campo label="Hora de término">
             <Entrada
-              type="number"
-              step="0.5"
-              value={cierreForm.horas}
-              onChange={(e) => setCierreForm({ ...cierreForm, horas: e.target.value })}
+              type="time"
+              value={cierreForm.hora_termino}
+              onChange={(e) => setCierreForm({ ...cierreForm, hora_termino: e.target.value })}
             />
           </Campo>
         </div>
+
+        {cierreForm.hora_inicio && cierreForm.hora_termino ? (
+          <p className="text-xs text-muted-foreground">
+            Horas de mano de obra calculadas: <span className="font-medium text-ink">{horasCierre} h</span>
+          </p>
+        ) : null}
 
         <div>
           <TituloSeccion>Repuestos utilizados</TituloSeccion>
           <p className="mt-1 text-[11px] text-muted-foreground">Se descuentan del stock al cerrar la orden.</p>
           <div className="mt-3 space-y-2">
-            {consumos.map((c, idx) => (
-              <div key={idx} className="flex gap-2">
-                <Seleccion
-                  value={c.insumo_id}
-                  onChange={(e) => {
-                    const copia = [...consumos];
-                    copia[idx] = { ...c, insumo_id: e.target.value };
-                    setConsumos(copia);
-                  }}
-                  className="flex-1"
-                >
-                  <option value="">Selecciona repuesto</option>
-                  {insumos.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.codigo} · {i.nombre} ({Number(i.stock_actual)} {i.unidad})
-                    </option>
-                  ))}
-                </Seleccion>
-                <Entrada
-                  type="number"
-                  className="w-24"
-                  value={c.cantidad}
-                  onChange={(e) => {
-                    const copia = [...consumos];
-                    copia[idx] = { ...c, cantidad: e.target.value };
-                    setConsumos(copia);
-                  }}
-                />
-                <button
-                  onClick={() => setConsumos(consumos.filter((_, i) => i !== idx))}
-                  className="shrink-0 px-1 text-xs text-muted-foreground hover:text-red"
-                  aria-label="Quitar repuesto"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
+            {consumos.map((c, idx) => {
+              const stockDisponible = insumos.find((i) => i.id === c.insumo_id)?.stock_actual;
+              const error = erroresConsumos[idx];
+              return (
+                <div key={idx}>
+                  <div className="flex gap-2">
+                    <Seleccion
+                      value={c.insumo_id}
+                      onChange={(e) => {
+                        const copia = [...consumos];
+                        copia[idx] = { ...c, insumo_id: e.target.value };
+                        setConsumos(copia);
+                      }}
+                      className="flex-1"
+                    >
+                      <option value="">Selecciona repuesto</option>
+                      {insumos.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.codigo} · {i.nombre} ({Number(i.stock_actual)} {i.unidad})
+                        </option>
+                      ))}
+                    </Seleccion>
+                    <Entrada
+                      type="number"
+                      className="w-24"
+                      min={1}
+                      max={stockDisponible !== undefined ? Number(stockDisponible) : undefined}
+                      value={c.cantidad}
+                      onChange={(e) => {
+                        const copia = [...consumos];
+                        copia[idx] = { ...c, cantidad: e.target.value };
+                        setConsumos(copia);
+                      }}
+                    />
+                    <button
+                      onClick={() => setConsumos(consumos.filter((_, i) => i !== idx))}
+                      className="shrink-0 px-1 text-xs text-muted-foreground hover:text-red"
+                      aria-label="Quitar repuesto"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  {error ? <p className="mt-1 text-[11px] text-red">{error}</p> : null}
+                </div>
+              );
+            })}
             <BotonSecundario onClick={() => setConsumos([...consumos, { insumo_id: "", cantidad: "1" }])}>
               Agregar repuesto
             </BotonSecundario>

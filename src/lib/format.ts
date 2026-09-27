@@ -36,6 +36,30 @@ export function nivelMantencion(fechaProxima: string | null | undefined): NivelM
   return "al_dia";
 }
 
+export function etiquetaTipoOrden(tipo: string) {
+  if (tipo === "preventiva_diaria") return "Preventiva diaria";
+  if (tipo === "preventiva_mensual") return "Preventiva mensual";
+  if (tipo === "correctiva") return "Correctiva";
+  // "preventiva" es el valor heredado de órdenes creadas antes de este cambio.
+  return "Preventiva";
+}
+
+export function tonoTipoOrden(tipo: string): "ok" | "clay" {
+  return tipo === "correctiva" ? "clay" : "ok";
+}
+
+// Calcula horas trabajadas a partir de hora de inicio y término ("HH:MM").
+// Si el término es menor al inicio, se asume que cruzó la medianoche.
+export function calcularHoras(inicio: string, termino: string): number {
+  if (!inicio || !termino) return 0;
+  const [hi, mi] = inicio.split(":").map(Number);
+  const [ht, mt] = termino.split(":").map(Number);
+  if ([hi, mi, ht, mt].some((n) => Number.isNaN(n))) return 0;
+  let minutos = ht * 60 + mt - (hi * 60 + mi);
+  if (minutos <= 0) minutos += 24 * 60;
+  return Math.round((minutos / 60) * 100) / 100;
+}
+
 export function descargarCSV(nombreArchivo: string, filas: Record<string, unknown>[]) {
   if (!filas.length) return;
   const columnas = Object.keys(filas[0]!);

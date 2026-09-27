@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/erp/AppShell";
 import { Tarjeta, TituloSeccion, EstadoMaquina, EstadoOrden, Vacio, Pastilla } from "@/components/erp/ui-bits";
 import { useMaquina, useOrdenes, costoOrden } from "@/lib/datos";
-import { fecha, money, diasHasta, nivelMantencion } from "@/lib/format";
+import { fecha, money, diasHasta, nivelMantencion, etiquetaTipoOrden } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/maquinaria/$id")({
   head: () => ({
@@ -67,8 +67,7 @@ function FichaMaquina() {
                 <div className="grid h-full place-items-center text-[10px] uppercase tracking-widest text-muted-foreground">Sin foto</div>
               )}
             </div>
-            <div className="grid min-w-0 flex-1 grid-cols-2 gap-4">
-              <Dato etiqueta="Ubicación" valor={maquina.ubicacion ?? "—"} />
+            <div className="grid min-w-0 flex-1 grid-cols-3 gap-4">
               <Dato etiqueta="Año" valor={maquina.anio ? String(maquina.anio) : "—"} />
               <Dato etiqueta="Periodicidad" valor={`${maquina.periodicidad_dias} días`} />
               <div>
@@ -110,9 +109,7 @@ function FichaMaquina() {
                 <span className="absolute -left-[26px] top-1.5 size-2.5 rounded-full bg-accent ring-4 ring-surface" />
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-muted-foreground">#{o.folio}</span>
-                  <span className="text-sm font-medium">
-                    {o.tipo === "preventiva" ? "Preventiva" : "Correctiva"}
-                  </span>
+                  <span className="text-sm font-medium">{etiquetaTipoOrden(o.tipo)}</span>
                   <EstadoOrden estado={o.estado} />
                   <span className="text-xs text-muted-foreground">
                     {fecha(o.fecha_ejecucion ?? o.fecha_programada)} · {o.empleados?.nombre ?? "Sin técnico"}

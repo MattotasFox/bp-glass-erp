@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/erp/AppShell";
 import { Tarjeta, TituloSeccion, Pastilla, EstadoOrden, Vacio } from "@/components/erp/ui-bits";
 import { useMaquinas, useInventario, useOrdenes, costoOrden } from "@/lib/datos";
-import { money, fecha, diasHasta, nivelMantencion } from "@/lib/format";
+import { money, fecha, diasHasta, nivelMantencion, etiquetaTipoOrden } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/panel")({
   head: () => ({
@@ -121,7 +121,7 @@ function Panel() {
                   #{o.folio} · {o.maquinas?.nombre ?? "—"}
                 </div>
                 <div className="text-[11px] text-muted-foreground">
-                  {o.tipo === "preventiva" ? "Preventiva" : "Correctiva"} · {fecha(o.fecha_programada)} ·{" "}
+                  {etiquetaTipoOrden(o.tipo)} · {fecha(o.fecha_programada)} ·{" "}
                   {o.empleados?.nombre ?? "Sin técnico"}
                 </div>
               </div>

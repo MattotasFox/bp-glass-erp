@@ -4,7 +4,7 @@ import { AppShell } from "@/components/erp/AppShell";
 import { Tarjeta, TituloSeccion, BotonSecundario, Campo, Entrada, Vacio } from "@/components/erp/ui-bits";
 import { useOrdenes, useEmpleados, useMaquinas, useRemuneraciones, costoOrden } from "@/lib/datos";
 import { useAuth } from "@/hooks/useAuth";
-import { money, fecha, descargarCSV } from "@/lib/format";
+import { money, fecha, descargarCSV, etiquetaTipoOrden } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/reportes")({
   head: () => ({
@@ -86,7 +86,7 @@ function Reportes() {
           folio: o.folio,
           maquina: o.maquinas?.nombre ?? "",
           codigo: o.maquinas?.codigo ?? "",
-          tipo: o.tipo,
+          tipo: etiquetaTipoOrden(o.tipo),
           fecha_ejecucion: o.fecha_ejecucion ?? "",
           tecnico: o.empleados?.nombre ?? "",
           horas: Number(o.horas_mano_obra),

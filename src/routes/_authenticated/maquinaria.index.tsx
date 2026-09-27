@@ -39,7 +39,6 @@ const vacio = {
   codigo: "",
   marca: "",
   modelo: "",
-  ubicacion: "",
   anio: "",
   foto_url: "",
   estado: "operativa",
@@ -82,7 +81,6 @@ function Maquinaria() {
         codigo: form.codigo,
         marca: form.marca || null,
         modelo: form.modelo || null,
-        ubicacion: form.ubicacion || null,
         anio: form.anio ? Number(form.anio) : null,
         foto_url: form.foto_url || null,
         estado: form.estado as "operativa",
@@ -127,7 +125,6 @@ function Maquinaria() {
           <thead>
             <tr className="border-b border-line text-left font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
               <th className="px-5 py-3 font-normal">Equipo</th>
-              <th className="px-5 py-3 font-normal">Ubicación</th>
               <th className="px-5 py-3 font-normal">Estado</th>
               <th className="px-5 py-3 font-normal">Última</th>
               <th className="px-5 py-3 font-normal">Próxima</th>
@@ -145,7 +142,6 @@ function Maquinaria() {
                     </div>
                   </Link>
                 </td>
-                <td className="px-5 py-3 text-muted-foreground">{m.ubicacion ?? "—"}</td>
                 <td className="px-5 py-3"><EstadoMaquina estado={m.estado} /></td>
                 <td className="px-5 py-3 text-muted-foreground">{fecha(m.fecha_ultima_mantencion)}</td>
                 <td className="px-5 py-3 text-muted-foreground">{fecha(m.fecha_proxima_mantencion)}</td>
@@ -178,10 +174,7 @@ function Maquinaria() {
           <Campo label="Marca"><Entrada value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value })} /></Campo>
           <Campo label="Modelo"><Entrada value={form.modelo} onChange={(e) => setForm({ ...form, modelo: e.target.value })} /></Campo>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Campo label="Ubicación"><Entrada value={form.ubicacion} onChange={(e) => setForm({ ...form, ubicacion: e.target.value })} /></Campo>
-          <Campo label="Año"><Entrada type="number" value={form.anio} onChange={(e) => setForm({ ...form, anio: e.target.value })} /></Campo>
-        </div>
+        <Campo label="Año"><Entrada type="number" value={form.anio} onChange={(e) => setForm({ ...form, anio: e.target.value })} /></Campo>
         <Campo label="Foto (URL)"><Entrada value={form.foto_url} onChange={(e) => setForm({ ...form, foto_url: e.target.value })} /></Campo>
         <div className="grid grid-cols-2 gap-3">
           <Campo label="Estado">

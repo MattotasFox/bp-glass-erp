@@ -222,6 +222,8 @@ export type Database = {
           fecha_ejecucion: string | null
           fecha_programada: string
           folio: number
+          hora_inicio: string | null
+          hora_termino: string | null
           horas_mano_obra: number
           id: string
           maquina_id: string
@@ -237,6 +239,8 @@ export type Database = {
           fecha_ejecucion?: string | null
           fecha_programada: string
           folio?: number
+          hora_inicio?: string | null
+          hora_termino?: string | null
           horas_mano_obra?: number
           id?: string
           maquina_id: string
@@ -252,6 +256,8 @@ export type Database = {
           fecha_ejecucion?: string | null
           fecha_programada?: string
           folio?: number
+          hora_inicio?: string | null
+          hora_termino?: string | null
           horas_mano_obra?: number
           id?: string
           maquina_id?: string
@@ -333,7 +339,7 @@ export type Database = {
       app_role: "admin" | "tecnico" | "rrhh"
       estado_maquina: "operativa" | "en_mantencion" | "fuera_de_servicio"
       estado_orden: "pendiente" | "en_proceso" | "completada" | "cancelada"
-      tipo_orden: "preventiva" | "correctiva"
+      tipo_orden: "preventiva" | "preventiva_diaria" | "preventiva_mensual" | "correctiva"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -464,7 +470,7 @@ export const Constants = {
       app_role: ["admin", "tecnico", "rrhh"],
       estado_maquina: ["operativa", "en_mantencion", "fuera_de_servicio"],
       estado_orden: ["pendiente", "en_proceso", "completada", "cancelada"],
-      tipo_orden: ["preventiva", "correctiva"],
+      tipo_orden: ["preventiva", "preventiva_diaria", "preventiva_mensual", "correctiva"],
     },
   },
 } as const
