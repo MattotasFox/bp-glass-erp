@@ -52,8 +52,8 @@ export function tonoTipoOrden(tipo: string): "ok" | "clay" {
 // Si el término es menor al inicio, se asume que cruzó la medianoche.
 export function calcularHoras(inicio: string, termino: string): number {
   if (!inicio || !termino) return 0;
-  const [hi, mi] = inicio.split(":").map(Number);
-  const [ht, mt] = termino.split(":").map(Number);
+  const [hi = NaN, mi = NaN] = inicio.split(":").map(Number);
+  const [ht = NaN, mt = NaN] = termino.split(":").map(Number);
   if ([hi, mi, ht, mt].some((n) => Number.isNaN(n))) return 0;
   let minutos = ht * 60 + mt - (hi * 60 + mi);
   if (minutos <= 0) minutos += 24 * 60;

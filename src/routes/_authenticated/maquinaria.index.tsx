@@ -11,12 +11,14 @@ import {
   Campo,
   Entrada,
   Seleccion,
+  AreaTexto,
   PanelLateral,
   EstadoMaquina,
   Pastilla,
+  TituloSeccion,
   Vacio,
 } from "@/components/erp/ui-bits";
-import { useMaquinas, type Maquina } from "@/lib/datos";
+import { useMaquinas, fetchPasosMaquina, type Maquina } from "@/lib/datos";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { fecha, diasHasta, nivelMantencion } from "@/lib/format";
@@ -48,6 +50,115 @@ const vacio = {
   fecha_proxima_mantencion: "",
 };
 
+type PasoForm = { id: string; descripcion: string };
+type PasosForm = { diaria: PasoForm[]; mensual: PasoForm[] };
+
+const pasosVacios = (): PasosForm => ({ diaria: [], mensual: [] });
+const nuevoPaso = (): PasoForm => ({ id: crypto.randomUUID(), descripcion: "" });
+
+// Guarda los pasos de una máquina: inserta/actualiza los de la lista (con su posición)
+// y elimina los que ya no están. Los pasos vacíos se ignoran.
+async function guardarPasos(maquinaId: string, pasos: PasosForm) {
+  const limpiar = (lista: PasoForm[]) =>
+    lista.map((p) => ({ id: p.id, descripcion: p.descripcion.trim() })).filter((p) => p.descripcion);
+  const filas = [
+    ...limpiar(pasos.diaria).map((p, i) => ({
+      id: p.id,
+      maquina_id: maquinaId,
+      frecuencia: "diaria" as const,
+      posicion: i + 1,
+      descripcion: p.descripcion,
+    })),
+    ...limpiar(pasos.mensual).map((p, i) => ({
+      id: p.id,
+      maquina_id: maquinaId,
+      frecuencia: "mensual" as const,
+      posicion: i + 1,
+      descripcion: p.descripcion,
+    })),
+  ];
+  if (filas.length) {
+    const { error } = await supabase.from("maquina_pasos").upsert(filas, { onConflict: "id" });
+    if (error) throw error;
+  }
+  let borrar = supabase.from("maquina_pasos").delete().eq("maquina_id", maquinaId);
+  if (filas.length) borrar = borrar.not("id", "in", `(${filas.map((f) => f.id).join(",")})`);
+  const { error } = await borrar;
+  if (error) throw error;
+}
+
+function EditorPasos({
+  titulo,
+  ayuda,
+  pasos,
+  onChange,
+}: {
+  titulo: string;
+  ayuda: string;
+  pasos: PasoForm[];
+  onChange: (pasos: PasoForm[]) => void;
+}) {
+  function mover(i: number, delta: -1 | 1) {
+    const j = i + delta;
+    if (j < 0 || j >= pasos.length) return;
+    const copia = [...pasos];
+    [copia[i], copia[j]] = [copia[j]!, copia[i]!];
+    onChange(copia);
+  }
+
+  return (
+    <div>
+      <TituloSeccion>{titulo}</TituloSeccion>
+      <p className="mt-1 text-[11px] text-muted-foreground">{ayuda}</p>
+      <ol className="mt-3 space-y-2">
+        {pasos.map((p, i) => (
+          <li key={p.id} className="flex items-start gap-2">
+            <span className="mt-2.5 w-5 shrink-0 text-right font-mono text-xs text-muted-foreground">{i + 1}.</span>
+            <AreaTexto
+              rows={2}
+              value={p.descripcion}
+              placeholder="Describe el paso"
+              onChange={(e) => onChange(pasos.map((x, k) => (k === i ? { ...x, descripcion: e.target.value } : x)))}
+              className="min-w-0 flex-1"
+            />
+            <div className="flex shrink-0 flex-col">
+              <button
+                type="button"
+                onClick={() => mover(i, -1)}
+                disabled={i === 0}
+                aria-label="Subir paso"
+                className="grid h-5 w-6 place-items-center text-[10px] text-muted-foreground hover:text-ink disabled:opacity-30"
+              >
+                ▲
+              </button>
+              <button
+                type="button"
+                onClick={() => mover(i, 1)}
+                disabled={i === pasos.length - 1}
+                aria-label="Bajar paso"
+                className="grid h-5 w-6 place-items-center text-[10px] text-muted-foreground hover:text-ink disabled:opacity-30"
+              >
+                ▼
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => onChange(pasos.filter((_, k) => k !== i))}
+              aria-label="Quitar paso"
+              className="mt-2 shrink-0 px-1 text-xs text-muted-foreground hover:text-red"
+            >
+              ✕
+            </button>
+          </li>
+        ))}
+      </ol>
+      <div className="mt-2">
+        <BotonSecundario onClick={() => onChange([...pasos, nuevoPaso()])}>Agregar paso</BotonSecundario>
+      </div>
+    </div>
+  );
+}
+
 export function AvisoMantencion({ fechaProxima }: { fechaProxima: string | null }) {
   const nivel = nivelMantencion(fechaProxima);
   const d = diasHasta(fechaProxima);
@@ -66,14 +177,27 @@ function Maquinaria() {
   const [abierto, setAbierto] = useState(false);
   const [editando, setEditando] = useState<Maquina | null>(null);
   const [form, setForm] = useState({ ...vacio });
+  const [pasos, setPasos] = useState<PasosForm>(pasosVacios());
 
   function abrirNuevo() {
     setEditando(null);
     setForm({ ...vacio });
+    setPasos(pasosVacios());
     setAbierto(true);
   }
 
-  function abrirEdicion(m: Maquina) {
+  async function abrirEdicion(m: Maquina) {
+    // Se cargan primero los pasos: si fallara y se abriera vacío, al guardar se borrarían.
+    try {
+      const existentes = await fetchPasosMaquina(m.id);
+      setPasos({
+        diaria: existentes.filter((p) => p.frecuencia === "diaria").map((p) => ({ id: p.id, descripcion: p.descripcion })),
+        mensual: existentes.filter((p) => p.frecuencia === "mensual").map((p) => ({ id: p.id, descripcion: p.descripcion })),
+      });
+    } catch {
+      toast.error("No se pudieron cargar los pasos de mantención. Intenta de nuevo.");
+      return;
+    }
     setEditando(m);
     setForm({
       nombre: m.nombre,
@@ -121,21 +245,36 @@ function Maquinaria() {
         fecha_ultima_mantencion: form.fecha_ultima_mantencion || null,
         fecha_proxima_mantencion: form.fecha_proxima_mantencion || null,
       };
+      let maquinaId = editando?.id ?? "";
       if (editando) {
         const { data, error } = await supabase.from("maquinas").update(fila).eq("id", editando.id).select("id");
         if (error) throw error;
         // Con RLS, una edición no permitida no da error: afecta 0 filas.
         if (!data?.length) throw new Error("No se pudo actualizar la máquina (sin permisos)");
       } else {
-        const { error } = await supabase.from("maquinas").insert(fila);
+        const { data, error } = await supabase.from("maquinas").insert(fila).select("id").single();
         if (error) throw error;
+        maquinaId = data.id;
+      }
+      try {
+        await guardarPasos(maquinaId, pasos);
+      } catch {
+        // La máquina ya quedó guardada: se cierra el panel para no duplicarla al reintentar.
+        qc.invalidateQueries({ queryKey: ["maquinas"] });
+        setAbierto(false);
+        setEditando(null);
+        setForm({ ...vacio });
+        setPasos(pasosVacios());
+        throw new Error("La máquina se guardó, pero no se pudieron guardar los pasos. Ábrela con «Editar» para reintentarlo.");
       }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["maquinas"] });
       qc.invalidateQueries({ queryKey: ["maquina"] });
+      qc.invalidateQueries({ queryKey: ["maquina_pasos"] });
       setAbierto(false);
       setForm({ ...vacio });
+      setPasos(pasosVacios());
       toast.success(editando ? "Máquina actualizada" : "Máquina registrada");
       setEditando(null);
     },
@@ -283,6 +422,23 @@ function Maquinaria() {
           <Campo label="Próxima mantención">
             <Entrada type="date" value={form.fecha_proxima_mantencion} onChange={(e) => setForm({ ...form, fecha_proxima_mantencion: e.target.value })} />
           </Campo>
+        </div>
+
+        <div className="border-t border-line pt-4">
+          <EditorPasos
+            titulo="Pasos de mantención diaria"
+            ayuda="Se muestran, en este orden, al cerrar una orden preventiva diaria de esta máquina."
+            pasos={pasos.diaria}
+            onChange={(diaria) => setPasos({ ...pasos, diaria })}
+          />
+        </div>
+        <div className="border-t border-line pt-4">
+          <EditorPasos
+            titulo="Pasos de mantención mensual"
+            ayuda="Se muestran, en este orden, al cerrar una orden preventiva mensual de esta máquina."
+            pasos={pasos.mensual}
+            onChange={(mensual) => setPasos({ ...pasos, mensual })}
+          />
         </div>
       </PanelLateral>
     </AppShell>

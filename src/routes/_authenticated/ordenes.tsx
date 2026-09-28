@@ -18,13 +18,25 @@ import {
   Vacio,
   TituloSeccion,
 } from "@/components/erp/ui-bits";
-import { useMaquinas, useEmpleados, useInventario, useOrdenes, costoOrden, type OrdenCompleta } from "@/lib/datos";
+import {
+  useMaquinas,
+  useEmpleados,
+  useInventario,
+  useOrdenes,
+  usePasosMaquina,
+  costoOrden,
+  type OrdenCompleta,
+} from "@/lib/datos";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { fecha, money, hoyISO, etiquetaTipoOrden, tonoTipoOrden, calcularHoras } from "@/lib/format";
 import type { Database } from "@/integrations/supabase/types";
 
 type TipoOrden = Database["public"]["Enums"]["tipo_orden"];
+
+function manianaISO() {
+  return new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+}
 
 export const Route = createFileRoute("/_authenticated/ordenes")({
   head: () => ({
@@ -69,6 +81,29 @@ function Ordenes() {
     observaciones: "",
   });
   const [consumos, setConsumos] = useState<{ insumo_id: string; cantidad: string }[]>([]);
+  const [pasosMarcados, setPasosMarcados] = useState<string[]>([]);
+  const [reprogramar, setReprogramar] = useState<{
+    orden: OrdenCompleta;
+    fechaNueva: string;
+    motivo: string;
+    pendientes: string[];
+  } | null>(null);
+
+  // Pasos de mantención según el tipo de la orden: diaria → pasos diarios, mensual → pasos
+  // mensuales. Las correctivas (y las órdenes antiguas "preventiva") no llevan pasos.
+  const frecuenciaCierre =
+    cierre?.tipo === "preventiva_diaria" ? "diaria" : cierre?.tipo === "preventiva_mensual" ? "mensual" : null;
+  const {
+    data: pasosMaquina = [],
+    isLoading: cargandoPasos,
+    isError: errorPasos,
+  } = usePasosMaquina(frecuenciaCierre ? cierre?.maquina_id : undefined);
+  const pasosCierre = useMemo(
+    () => pasosMaquina.filter((p) => p.frecuencia === frecuenciaCierre).sort((a, b) => a.posicion - b.posicion),
+    [pasosMaquina, frecuenciaCierre],
+  );
+  const pasosPendientes = pasosCierre.filter((p) => !pasosMarcados.includes(p.id));
+  const pasosOk = frecuenciaCierre === null || (!cargandoPasos && !errorPasos && pasosPendientes.length === 0);
 
   const lista = useMemo(() => {
     const t = busqueda.trim().toLowerCase();
@@ -105,7 +140,7 @@ function Ordenes() {
   });
 
   const cambiarEstado = useMutation({
-    mutationFn: async ({ id, estado }: { id: string; estado: "en_proceso" | "cancelada" | "pendiente" }) => {
+    mutationFn: async ({ id, estado }: { id: string; estado: "en_proceso" | "pendiente" }) => {
       const { error } = await supabase.from("ordenes_trabajo").update({ estado }).eq("id", id);
       if (error) throw error;
     },
@@ -153,6 +188,17 @@ function Ordenes() {
       if (hayErroresConsumos) {
         throw new Error("Revisa las cantidades de repuestos: hay valores inválidos");
       }
+      if (!pasosOk) {
+        throw new Error("Debes marcar todos los pasos de mantención para cerrar la orden");
+      }
+      if (pasosCierre.length) {
+        // Se guarda una copia de los pasos realizados (el texto queda fijo aunque luego se edite la máquina).
+        const { error } = await supabase.from("orden_trabajo_pasos").upsert(
+          pasosCierre.map((p) => ({ orden_id: cierre.id, posicion: p.posicion, descripcion: p.descripcion })),
+          { onConflict: "orden_id,posicion", ignoreDuplicates: true },
+        );
+        if (error) throw error;
+      }
       const filas = consumos
         .filter((c) => c.insumo_id && Number(c.cantidad) > 0)
         .map((c) => ({ orden_id: cierre.id, insumo_id: c.insumo_id, cantidad_usada: Number(c.cantidad) }));
@@ -177,7 +223,36 @@ function Ordenes() {
       qc.invalidateQueries({ queryKey: ["maquinas"] });
       qc.invalidateQueries({ queryKey: ["inventario"] });
       setCierre(null);
+      setPasosMarcados([]);
       toast.success("Orden cerrada: stock y fechas de mantención actualizados");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const reprogramarOrden = useMutation({
+    mutationFn: async () => {
+      if (!reprogramar) return;
+      const { orden, fechaNueva, motivo, pendientes } = reprogramar;
+      if (!fechaNueva || fechaNueva < hoyISO()) throw new Error("Elige una nueva fecha desde hoy en adelante");
+      // El detalle de la reprogramación queda registrado en las observaciones de la orden.
+      const detalle = [`[${fecha(hoyISO())}] Reprogramada: ${fecha(orden.fecha_programada)} → ${fecha(fechaNueva)}.`];
+      if (pendientes.length) detalle.push(`Pasos sin realizar: ${pendientes.join("; ")}.`);
+      if (motivo.trim()) detalle.push(`Motivo: ${motivo.trim()}`);
+      const observaciones = [orden.observaciones, detalle.join(" ")].filter(Boolean).join("\n");
+      const { data, error } = await supabase
+        .from("ordenes_trabajo")
+        .update({ estado: "reprogramada", fecha_programada: fechaNueva, observaciones })
+        .eq("id", orden.id)
+        .select("id");
+      if (error) throw error;
+      if (!data?.length) throw new Error("No se pudo reprogramar la orden (sin permisos)");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ordenes"] });
+      setReprogramar(null);
+      setCierre(null);
+      setPasosMarcados([]);
+      toast.success("Orden reprogramada");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -191,6 +266,7 @@ function Ordenes() {
       observaciones: o.observaciones ?? "",
     });
     setConsumos([]);
+    setPasosMarcados([]);
   }
 
   const horasCierre = calcularHoras(cierreForm.hora_inicio, cierreForm.hora_termino);
@@ -225,7 +301,7 @@ function Ordenes() {
   return (
     <AppShell
       titulo="Órdenes de trabajo"
-      subtitulo={`${ordenes.filter((o) => o.estado === "pendiente").length} pendientes de ejecución`}
+      subtitulo={`${ordenes.filter((o) => o.estado === "pendiente" || o.estado === "reprogramada").length} pendientes de ejecución`}
       acciones={
         <>
           <Buscador valor={busqueda} onChange={setBusqueda} placeholder="Folio, equipo o técnico…" />
@@ -238,7 +314,7 @@ function Ordenes() {
             <option value="pendiente">Pendiente</option>
             <option value="en_proceso">En proceso</option>
             <option value="completada">Completada</option>
-            <option value="cancelada">Cancelada</option>
+            <option value="reprogramada">Reprogramada</option>
           </select>
           {puedeCrear ? <BotonPrincipal onClick={() => setNueva({ ...nuevaVacia })}>Nueva orden</BotonPrincipal> : null}
         </>
@@ -274,9 +350,9 @@ function Ordenes() {
                 <td className="px-5 py-3"><EstadoOrden estado={o.estado} /></td>
                 <td className="px-5 py-3">{money(costoOrden(o).total)}</td>
                 <td className="px-5 py-3 text-right">
-                  {puedeEditar && o.estado !== "completada" && o.estado !== "cancelada" ? (
+                  {puedeEditar && o.estado !== "completada" ? (
                     <div className="flex justify-end gap-3">
-                      {o.estado === "pendiente" ? (
+                      {o.estado === "pendiente" || o.estado === "reprogramada" ? (
                         <button
                           onClick={() => cambiarEstado.mutate({ id: o.id, estado: "en_proceso" })}
                           className="text-xs text-muted-foreground hover:underline"
@@ -368,7 +444,7 @@ function Ordenes() {
       </PanelLateral>
 
       <PanelLateral
-        abierto={cierre !== null}
+        abierto={cierre !== null && reprogramar === null}
         titulo={cierre ? `Cerrar orden #${cierre.folio}` : ""}
         subtitulo={cierre?.maquinas?.nombre ?? ""}
         onCerrar={() => setCierre(null)}
@@ -385,20 +461,25 @@ function Ordenes() {
                   cerrarOrden.isPending ||
                   !cierreForm.hora_inicio ||
                   !cierreForm.hora_termino ||
-                  hayErroresConsumos
+                  hayErroresConsumos ||
+                  !pasosOk
                 }
                 onClick={() => cerrarOrden.mutate()}
               >
                 Cerrar orden
               </BotonPrincipal>
-              {cierre && esAdmin ? (
+              {cierre ? (
                 <BotonSecundario
-                  onClick={() => {
-                    cambiarEstado.mutate({ id: cierre.id, estado: "cancelada" });
-                    setCierre(null);
-                  }}
+                  onClick={() =>
+                    setReprogramar({
+                      orden: cierre,
+                      fechaNueva: manianaISO(),
+                      motivo: "",
+                      pendientes: pasosPendientes.map((p) => `${pasosCierre.indexOf(p) + 1}. ${p.descripcion}`),
+                    })
+                  }
                 >
-                  Cancelar orden
+                  Reprogramar
                 </BotonSecundario>
               ) : null}
             </div>
@@ -498,6 +579,108 @@ function Ordenes() {
             onChange={(e) => setCierreForm({ ...cierreForm, observaciones: e.target.value })}
           />
         </Campo>
+
+        {frecuenciaCierre ? (
+          <div>
+            <TituloSeccion>Pasos de mantención {frecuenciaCierre}</TituloSeccion>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Marca cada paso realizado. Para cerrar la orden deben estar todos marcados; si falta alguno, reprograma la orden.
+            </p>
+            {cargandoPasos ? (
+              <p className="mt-3 text-xs text-muted-foreground">Cargando pasos…</p>
+            ) : errorPasos ? (
+              <p className="mt-3 text-xs text-red">No se pudieron cargar los pasos. Cierra este panel y vuelve a abrirlo.</p>
+            ) : pasosCierre.length === 0 ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Esta máquina no tiene pasos de mantención {frecuenciaCierre} definidos.
+              </p>
+            ) : (
+              <>
+                <ol className="mt-3 space-y-2">
+                  {pasosCierre.map((p, idx) => (
+                    <li key={p.id}>
+                      <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-base px-3 py-2.5 ring-1 ring-line">
+                        <input
+                          type="checkbox"
+                          checked={pasosMarcados.includes(p.id)}
+                          onChange={(e) =>
+                            setPasosMarcados(
+                              e.target.checked ? [...pasosMarcados, p.id] : pasosMarcados.filter((id) => id !== p.id),
+                            )
+                          }
+                          className="mt-0.5 size-4 shrink-0 accent-[var(--accent)]"
+                        />
+                        <span className="text-sm">
+                          <span className="mr-1.5 font-mono text-xs text-muted-foreground">{idx + 1}.</span>
+                          {p.descripcion}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ol>
+                <p className={`mt-2 text-xs ${pasosPendientes.length ? "text-amber" : "text-ok"}`}>
+                  {pasosCierre.length - pasosPendientes.length} de {pasosCierre.length} pasos realizados
+                  {pasosPendientes.length
+                    ? ` · faltan ${pasosPendientes.length}: no se puede cerrar la orden, usa «Reprogramar».`
+                    : " · listo para cerrar."}
+                </p>
+              </>
+            )}
+          </div>
+        ) : null}
+      </PanelLateral>
+
+      <PanelLateral
+        abierto={reprogramar !== null}
+        titulo={reprogramar ? `Reprogramar orden #${reprogramar.orden.folio}` : ""}
+        subtitulo={reprogramar?.orden.maquinas?.nombre ?? ""}
+        onCerrar={() => setReprogramar(null)}
+        pie={
+          <BotonPrincipal
+            className="w-full"
+            disabled={
+              reprogramarOrden.isPending || !reprogramar?.fechaNueva || (reprogramar?.fechaNueva ?? "") < hoyISO()
+            }
+            onClick={() => reprogramarOrden.mutate()}
+          >
+            Reprogramar orden
+          </BotonPrincipal>
+        }
+      >
+        {reprogramar ? (
+          <>
+            <p className="text-xs text-muted-foreground">
+              Fecha programada actual:{" "}
+              <span className="font-medium text-ink">{fecha(reprogramar.orden.fecha_programada)}</span>. La orden quedará
+              en estado «Reprogramada» y podrá iniciarse o cerrarse en la nueva fecha.
+            </p>
+            {reprogramar.pendientes.length ? (
+              <div className="rounded-xl bg-amber-soft px-3 py-2.5 text-xs text-amber">
+                <div className="font-medium">Pasos sin realizar</div>
+                <ul className="mt-1 space-y-0.5">
+                  {reprogramar.pendientes.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <Campo label="Nueva fecha programada">
+              <Entrada
+                type="date"
+                min={hoyISO()}
+                value={reprogramar.fechaNueva}
+                onChange={(e) => setReprogramar({ ...reprogramar, fechaNueva: e.target.value })}
+              />
+            </Campo>
+            <Campo label="Motivo (opcional)">
+              <AreaTexto
+                rows={3}
+                value={reprogramar.motivo}
+                onChange={(e) => setReprogramar({ ...reprogramar, motivo: e.target.value })}
+              />
+            </Campo>
+          </>
+        ) : null}
       </PanelLateral>
     </AppShell>
   );

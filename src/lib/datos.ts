@@ -7,6 +7,8 @@ export type Insumo = Tables<"inventario">;
 export type Empleado = Tables<"empleados">;
 export type Orden = Tables<"ordenes_trabajo">;
 export type OrdenInsumo = Tables<"orden_trabajo_insumos">;
+export type PasoMaquina = Tables<"maquina_pasos">;
+export type PasoOrden = Tables<"orden_trabajo_pasos">;
 
 export function useMaquinas() {
   return useQuery({
@@ -56,10 +58,11 @@ export type OrdenCompleta = Orden & {
   maquinas: Pick<Maquina, "id" | "nombre" | "codigo"> | null;
   empleados: Pick<Empleado, "id" | "nombre" | "tarifa_hora"> | null;
   orden_trabajo_insumos: (OrdenInsumo & { inventario: Pick<Insumo, "nombre" | "codigo" | "unidad"> | null })[];
+  orden_trabajo_pasos: PasoOrden[];
 };
 
 const seleccionOrden =
-  "*, maquinas(id, nombre, codigo), empleados(id, nombre, tarifa_hora), orden_trabajo_insumos(*, inventario(nombre, codigo, unidad))";
+  "*, maquinas(id, nombre, codigo), empleados(id, nombre, tarifa_hora), orden_trabajo_insumos(*, inventario(nombre, codigo, unidad)), orden_trabajo_pasos(*)";
 
 export function useOrdenes() {
   return useQuery({
@@ -82,6 +85,25 @@ export function costoOrden(o: OrdenCompleta) {
   );
   const manoObra = Number(o.horas_mano_obra ?? 0) * Number(o.empleados?.tarifa_hora ?? 0);
   return { insumos, manoObra, total: insumos + manoObra };
+}
+
+export async function fetchPasosMaquina(maquinaId: string) {
+  const { data, error } = await supabase
+    .from("maquina_pasos")
+    .select("*")
+    .eq("maquina_id", maquinaId)
+    .order("frecuencia")
+    .order("posicion");
+  if (error) throw error;
+  return data as PasoMaquina[];
+}
+
+export function usePasosMaquina(maquinaId: string | undefined) {
+  return useQuery({
+    queryKey: ["maquina_pasos", maquinaId],
+    enabled: !!maquinaId,
+    queryFn: () => fetchPasosMaquina(maquinaId!),
+  });
 }
 
 export function useRemuneraciones(habilitado: boolean) {

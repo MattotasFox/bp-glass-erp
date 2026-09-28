@@ -126,6 +126,41 @@ export type Database = {
           },
         ]
       }
+      maquina_pasos: {
+        Row: {
+          creado_en: string
+          descripcion: string
+          frecuencia: Database["public"]["Enums"]["frecuencia_paso"]
+          id: string
+          maquina_id: string
+          posicion: number
+        }
+        Insert: {
+          creado_en?: string
+          descripcion: string
+          frecuencia: Database["public"]["Enums"]["frecuencia_paso"]
+          id?: string
+          maquina_id: string
+          posicion: number
+        }
+        Update: {
+          creado_en?: string
+          descripcion?: string
+          frecuencia?: Database["public"]["Enums"]["frecuencia_paso"]
+          id?: string
+          maquina_id?: string
+          posicion?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maquina_pasos_maquina_id_fkey"
+            columns: ["maquina_id"]
+            isOneToOne: false
+            referencedRelation: "maquinas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       maquinas: {
         Row: {
           anio: number | null
@@ -209,6 +244,38 @@ export type Database = {
           },
           {
             foreignKeyName: "orden_trabajo_insumos_orden_id_fkey"
+            columns: ["orden_id"]
+            isOneToOne: false
+            referencedRelation: "ordenes_trabajo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orden_trabajo_pasos: {
+        Row: {
+          creado_en: string
+          descripcion: string
+          id: string
+          orden_id: string
+          posicion: number
+        }
+        Insert: {
+          creado_en?: string
+          descripcion: string
+          id?: string
+          orden_id: string
+          posicion: number
+        }
+        Update: {
+          creado_en?: string
+          descripcion?: string
+          id?: string
+          orden_id?: string
+          posicion?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orden_trabajo_pasos_orden_id_fkey"
             columns: ["orden_id"]
             isOneToOne: false
             referencedRelation: "ordenes_trabajo"
@@ -341,7 +408,8 @@ export type Database = {
     Enums: {
       app_role: "admin" | "tecnico" | "rrhh"
       estado_maquina: "operativa" | "en_mantencion" | "fuera_de_servicio"
-      estado_orden: "pendiente" | "en_proceso" | "completada" | "cancelada"
+      estado_orden: "pendiente" | "en_proceso" | "completada" | "reprogramada"
+      frecuencia_paso: "diaria" | "mensual"
       tipo_orden: "preventiva" | "preventiva_diaria" | "preventiva_mensual" | "correctiva"
     }
     CompositeTypes: {
@@ -472,7 +540,8 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "tecnico", "rrhh"],
       estado_maquina: ["operativa", "en_mantencion", "fuera_de_servicio"],
-      estado_orden: ["pendiente", "en_proceso", "completada", "cancelada"],
+      estado_orden: ["pendiente", "en_proceso", "completada", "reprogramada"],
+      frecuencia_paso: ["diaria", "mensual"],
       tipo_orden: ["preventiva", "preventiva_diaria", "preventiva_mensual", "correctiva"],
     },
   },

@@ -46,7 +46,7 @@ export function EstadoMaquina({ estado }: { estado: string }) {
 export function EstadoOrden({ estado }: { estado: string }) {
   if (estado === "completada") return <Pastilla tono="ok">Completada</Pastilla>;
   if (estado === "en_proceso") return <Pastilla tono="amber">En proceso</Pastilla>;
-  if (estado === "cancelada") return <Pastilla tono="neutro">Cancelada</Pastilla>;
+  if (estado === "reprogramada") return <Pastilla tono="neutro">Reprogramada</Pastilla>;
   return <Pastilla tono="clay">Pendiente</Pastilla>;
 }
 

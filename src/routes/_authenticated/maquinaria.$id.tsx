@@ -122,6 +122,18 @@ function FichaMaquina() {
                   <span>Mano de obra {money(c.manoObra)} ({Number(o.horas_mano_obra)} h)</span>
                   <span className="font-medium text-ink">Total {money(c.total)}</span>
                 </div>
+                {o.orden_trabajo_pasos?.length ? (
+                  <div className="mt-1.5 text-[11px] text-muted-foreground">
+                    <div>Pasos realizados ({o.orden_trabajo_pasos.length}):</div>
+                    <ol className="mt-0.5 space-y-0.5">
+                      {[...o.orden_trabajo_pasos]
+                        .sort((a, b) => a.posicion - b.posicion)
+                        .map((p) => (
+                          <li key={p.id}>✓ {p.posicion}. {p.descripcion}</li>
+                        ))}
+                    </ol>
+                  </div>
+                ) : null}
                 {o.orden_trabajo_insumos?.length ? (
                   <ul className="mt-1.5 text-[11px] text-muted-foreground">
                     {o.orden_trabajo_insumos.map((i) => (

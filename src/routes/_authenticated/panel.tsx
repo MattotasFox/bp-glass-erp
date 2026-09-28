@@ -48,7 +48,7 @@ function Panel() {
     .reduce((s, o) => s + costoOrden(o).total, 0);
 
   const proximas = ordenes
-    .filter((o) => o.estado === "pendiente" || o.estado === "en_proceso")
+    .filter((o) => o.estado === "pendiente" || o.estado === "en_proceso" || o.estado === "reprogramada")
     .sort((a, b) => a.fecha_programada.localeCompare(b.fecha_programada))
     .slice(0, 6);
 
