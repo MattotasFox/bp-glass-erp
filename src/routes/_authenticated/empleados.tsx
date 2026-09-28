@@ -10,6 +10,7 @@ import {
   Campo,
   Entrada,
   PanelLateral,
+  Pastilla,
   Vacio,
 } from "@/components/erp/ui-bits";
 import { useEmpleados, useRemuneraciones, useOrdenes, type Empleado } from "@/lib/datos";
@@ -31,7 +32,15 @@ export const Route = createFileRoute("/_authenticated/empleados")({
   component: Empleados,
 });
 
-const vacio = { nombre: "", cargo: "", area: "", fecha_ingreso: "", tarifa_hora: "0", sueldo_base: "0" };
+const vacio = {
+  nombre: "",
+  cargo: "",
+  area: "",
+  fecha_ingreso: "",
+  tarifa_hora: "0",
+  sueldo_base: "0",
+  es_tecnico: false,
+};
 
 function Empleados() {
   const { esAdmin, esRRHH } = useAuth();
@@ -66,6 +75,7 @@ function Empleados() {
       fecha_ingreso: e.fecha_ingreso ?? "",
       tarifa_hora: String(e.tarifa_hora),
       sueldo_base: String(rem?.sueldo_base ?? 0),
+      es_tecnico: e.es_tecnico,
     });
     setAbierto(true);
   }
@@ -78,6 +88,7 @@ function Empleados() {
         area: form.area || null,
         fecha_ingreso: form.fecha_ingreso || null,
         tarifa_hora: Number(form.tarifa_hora || 0),
+        es_tecnico: form.es_tecnico,
       };
       let empleadoId = editando?.id;
       if (editando) {
@@ -138,7 +149,10 @@ function Empleados() {
               return (
                 <tr key={e.id} className="hover:bg-base/60">
                   <td className="px-5 py-3">
-                    <div className="font-medium">{e.nombre}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{e.nombre}</span>
+                      {e.es_tecnico ? <Pastilla tono="clay">Técnico</Pastilla> : null}
+                    </div>
                     <div className="text-[11px] text-muted-foreground">{e.cargo ?? "—"}</div>
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">{e.area ?? "—"}</td>
@@ -188,6 +202,15 @@ function Empleados() {
             <Entrada type="number" value={form.sueldo_base} onChange={(e) => setForm({ ...form, sueldo_base: e.target.value })} />
           </Campo>
         </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={form.es_tecnico}
+            onChange={(e) => setForm({ ...form, es_tecnico: e.target.checked })}
+            className="size-4 accent-[var(--accent)]"
+          />
+          Es técnico (puede asignarse a órdenes de trabajo)
+        </label>
         <p className="text-[11px] text-muted-foreground">
           El sueldo base solo es visible para Administración y RRHH.
         </p>

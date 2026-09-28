@@ -117,6 +117,33 @@ function Ordenes() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const eliminar = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase
+        .from("ordenes_trabajo")
+        .delete()
+        .eq("id", id)
+        .eq("estado", "completada")
+        .select("id");
+      if (error) throw error;
+      // Con RLS, un borrado no permitido no da error: simplemente afecta 0 filas.
+      if (!data?.length) throw new Error("No se pudo eliminar la orden (sin permisos o ya no está completada)");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ordenes"] });
+      toast.success("Orden eliminada");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  function confirmarEliminar(o: OrdenCompleta) {
+    const ok = window.confirm(
+      `¿Eliminar la orden #${o.folio} de ${o.maquinas?.nombre ?? "la máquina"}?\n\n` +
+        "Se borrará también su detalle de repuestos y horas. El stock ya descontado no se devuelve. Esta acción no se puede deshacer.",
+    );
+    if (ok) eliminar.mutate(o.id);
+  }
+
   const cerrarOrden = useMutation({
     mutationFn: async () => {
       if (!cierre) return;
@@ -262,6 +289,15 @@ function Ordenes() {
                       </button>
                     </div>
                   ) : null}
+                  {esAdmin && o.estado === "completada" ? (
+                    <button
+                      onClick={() => confirmarEliminar(o)}
+                      disabled={eliminar.isPending}
+                      className="text-xs text-red hover:underline disabled:opacity-50"
+                    >
+                      Eliminar
+                    </button>
+                  ) : null}
                 </td>
               </tr>
             ))}
@@ -317,9 +353,11 @@ function Ordenes() {
             <Campo label="Técnico asignado">
               <Seleccion value={nueva.tecnico_id} onChange={(e) => setNueva({ ...nueva, tecnico_id: e.target.value })}>
                 <option value="">Sin asignar</option>
-                {empleados.map((e) => (
-                  <option key={e.id} value={e.id}>{e.nombre} — {e.cargo ?? "—"}</option>
-                ))}
+                {empleados
+                  .filter((e) => e.es_tecnico)
+                  .map((e) => (
+                    <option key={e.id} value={e.id}>{e.nombre} — {e.cargo ?? "—"}</option>
+                  ))}
               </Seleccion>
             </Campo>
             <Campo label="Descripción del trabajo">

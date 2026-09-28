@@ -7,6 +7,7 @@ import {
   Tarjeta,
   Buscador,
   BotonPrincipal,
+  BotonSecundario,
   Campo,
   Entrada,
   Seleccion,
@@ -15,7 +16,7 @@ import {
   Pastilla,
   Vacio,
 } from "@/components/erp/ui-bits";
-import { useMaquinas } from "@/lib/datos";
+import { useMaquinas, type Maquina } from "@/lib/datos";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { fecha, diasHasta, nivelMantencion } from "@/lib/format";
@@ -63,7 +64,39 @@ function Maquinaria() {
   const [busqueda, setBusqueda] = useState("");
   const [filtro, setFiltro] = useState("todas");
   const [abierto, setAbierto] = useState(false);
+  const [editando, setEditando] = useState<Maquina | null>(null);
   const [form, setForm] = useState({ ...vacio });
+
+  function abrirNuevo() {
+    setEditando(null);
+    setForm({ ...vacio });
+    setAbierto(true);
+  }
+
+  function abrirEdicion(m: Maquina) {
+    setEditando(m);
+    setForm({
+      nombre: m.nombre,
+      codigo: m.codigo,
+      marca: m.marca ?? "",
+      modelo: m.modelo ?? "",
+      anio: m.anio ? String(m.anio) : "",
+      foto_url: m.foto_url ?? "",
+      estado: m.estado,
+      periodicidad_dias: String(m.periodicidad_dias),
+      fecha_ultima_mantencion: m.fecha_ultima_mantencion ?? "",
+      fecha_proxima_mantencion: m.fecha_proxima_mantencion ?? "",
+    });
+    setAbierto(true);
+  }
+
+  // Si la máquina tiene una periodicidad fuera de las opciones estándar, se conserva.
+  const opcionesPeriodicidad = [30, 60, 90, 180];
+  const periodicidadActual = Number(form.periodicidad_dias);
+  if (periodicidadActual && !opcionesPeriodicidad.includes(periodicidadActual)) {
+    opcionesPeriodicidad.push(periodicidadActual);
+    opcionesPeriodicidad.sort((a, b) => a - b);
+  }
 
   const lista = useMemo(() => {
     const t = busqueda.trim().toLowerCase();
@@ -76,28 +109,66 @@ function Maquinaria() {
 
   const guardar = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("maquinas").insert({
+      const fila = {
         nombre: form.nombre,
         codigo: form.codigo,
         marca: form.marca || null,
         modelo: form.modelo || null,
         anio: form.anio ? Number(form.anio) : null,
         foto_url: form.foto_url || null,
-        estado: form.estado as "operativa",
+        estado: form.estado as Maquina["estado"],
         periodicidad_dias: Number(form.periodicidad_dias || 30),
         fecha_ultima_mantencion: form.fecha_ultima_mantencion || null,
         fecha_proxima_mantencion: form.fecha_proxima_mantencion || null,
-      });
-      if (error) throw error;
+      };
+      if (editando) {
+        const { data, error } = await supabase.from("maquinas").update(fila).eq("id", editando.id).select("id");
+        if (error) throw error;
+        // Con RLS, una edición no permitida no da error: afecta 0 filas.
+        if (!data?.length) throw new Error("No se pudo actualizar la máquina (sin permisos)");
+      } else {
+        const { error } = await supabase.from("maquinas").insert(fila);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["maquinas"] });
+      qc.invalidateQueries({ queryKey: ["maquina"] });
       setAbierto(false);
       setForm({ ...vacio });
-      toast.success("Máquina registrada");
+      toast.success(editando ? "Máquina actualizada" : "Máquina registrada");
+      setEditando(null);
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const eliminar = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.from("maquinas").delete().eq("id", id).select("id");
+      if (error) {
+        if (error.code === "23503") {
+          throw new Error("No se puede eliminar: la máquina tiene órdenes de trabajo registradas");
+        }
+        throw error;
+      }
+      if (!data?.length) throw new Error("No se pudo eliminar la máquina (sin permisos)");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["maquinas"] });
+      qc.invalidateQueries({ queryKey: ["inventario"] });
+      setAbierto(false);
+      setEditando(null);
+      toast.success("Máquina eliminada");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  function confirmarEliminar(m: Maquina) {
+    const ok = window.confirm(
+      `¿Eliminar la máquina ${m.codigo} · ${m.nombre}?\n\nLos repuestos asociados quedarán sin equipo. Esta acción no se puede deshacer.`,
+    );
+    if (ok) eliminar.mutate(m.id);
+  }
 
   return (
     <AppShell
@@ -116,7 +187,7 @@ function Maquinaria() {
             <option value="en_mantencion">En mantención</option>
             <option value="fuera_de_servicio">Fuera de servicio</option>
           </select>
-          {esAdmin ? <BotonPrincipal onClick={() => setAbierto(true)}>Nueva máquina</BotonPrincipal> : null}
+          {esAdmin ? <BotonPrincipal onClick={abrirNuevo}>Nueva máquina</BotonPrincipal> : null}
         </>
       }
     >
@@ -129,6 +200,7 @@ function Maquinaria() {
               <th className="px-5 py-3 font-normal">Última</th>
               <th className="px-5 py-3 font-normal">Próxima</th>
               <th className="px-5 py-3 font-normal">Alerta</th>
+              {esAdmin ? <th className="px-5 py-3 font-normal" /> : null}
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -146,6 +218,13 @@ function Maquinaria() {
                 <td className="px-5 py-3 text-muted-foreground">{fecha(m.fecha_ultima_mantencion)}</td>
                 <td className="px-5 py-3 text-muted-foreground">{fecha(m.fecha_proxima_mantencion)}</td>
                 <td className="px-5 py-3"><AvisoMantencion fechaProxima={m.fecha_proxima_mantencion} /></td>
+                {esAdmin ? (
+                  <td className="px-5 py-3 text-right">
+                    <button onClick={() => abrirEdicion(m)} className="text-xs text-accent hover:underline">
+                      Editar
+                    </button>
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>
@@ -155,17 +234,22 @@ function Maquinaria() {
 
       <PanelLateral
         abierto={abierto}
-        titulo="Nueva máquina"
+        titulo={editando ? "Editar máquina" : "Nueva máquina"}
         subtitulo="Ficha de equipo"
         onCerrar={() => setAbierto(false)}
         pie={
-          <BotonPrincipal
-            className="w-full"
-            disabled={guardar.isPending || !form.nombre || !form.codigo}
-            onClick={() => guardar.mutate()}
-          >
-            Guardar máquina
-          </BotonPrincipal>
+          <div className="flex gap-2">
+            <BotonPrincipal
+              className="flex-1"
+              disabled={guardar.isPending || !form.nombre || !form.codigo}
+              onClick={() => guardar.mutate()}
+            >
+              Guardar máquina
+            </BotonPrincipal>
+            {editando ? (
+              <BotonSecundario onClick={() => confirmarEliminar(editando)}>Eliminar</BotonSecundario>
+            ) : null}
+          </div>
         }
       >
         <Campo label="Nombre"><Entrada value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} /></Campo>
@@ -186,10 +270,9 @@ function Maquinaria() {
           </Campo>
           <Campo label="Periodicidad (días)">
             <Seleccion value={form.periodicidad_dias} onChange={(e) => setForm({ ...form, periodicidad_dias: e.target.value })}>
-              <option value="30">30 días</option>
-              <option value="60">60 días</option>
-              <option value="90">90 días</option>
-              <option value="180">180 días</option>
+              {opcionesPeriodicidad.map((d) => (
+                <option key={d} value={String(d)}>{d} días</option>
+              ))}
             </Seleccion>
           </Campo>
         </div>

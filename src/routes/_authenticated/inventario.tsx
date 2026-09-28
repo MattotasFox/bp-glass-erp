@@ -56,6 +56,12 @@ function Inventario() {
   const [editando, setEditando] = useState<Insumo | null>(null);
   const [form, setForm] = useState({ ...vacio });
 
+  // Stock, mínimo y costo no pueden ser negativos ni valores no numéricos.
+  const valoresInvalidos = [form.stock_actual, form.stock_minimo, form.costo_unitario].some((v) => {
+    const n = Number(v || 0);
+    return Number.isNaN(n) || n < 0;
+  });
+
   const lista = useMemo(() => {
     const t = busqueda.trim().toLowerCase();
     return insumos.filter(
@@ -88,6 +94,7 @@ function Inventario() {
 
   const guardar = useMutation({
     mutationFn: async () => {
+      if (valoresInvalidos) throw new Error("Stock, mínimo y costo no pueden ser negativos");
       const fila = {
         nombre: form.nombre,
         codigo: form.codigo,
@@ -196,7 +203,7 @@ function Inventario() {
           <div className="flex gap-2">
             <BotonPrincipal
               className="flex-1"
-              disabled={guardar.isPending || !form.nombre || !form.codigo}
+              disabled={guardar.isPending || !form.nombre || !form.codigo || valoresInvalidos}
               onClick={() => guardar.mutate()}
             >
               Guardar
@@ -210,13 +217,16 @@ function Inventario() {
         <Campo label="Nombre"><Entrada value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} /></Campo>
         <Campo label="Código"><Entrada value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} /></Campo>
         <div className="grid grid-cols-3 gap-3">
-          <Campo label="Stock"><Entrada type="number" value={form.stock_actual} onChange={(e) => setForm({ ...form, stock_actual: e.target.value })} /></Campo>
-          <Campo label="Mínimo"><Entrada type="number" value={form.stock_minimo} onChange={(e) => setForm({ ...form, stock_minimo: e.target.value })} /></Campo>
+          <Campo label="Stock"><Entrada type="number" min={0} value={form.stock_actual} onChange={(e) => setForm({ ...form, stock_actual: e.target.value })} /></Campo>
+          <Campo label="Mínimo"><Entrada type="number" min={0} value={form.stock_minimo} onChange={(e) => setForm({ ...form, stock_minimo: e.target.value })} /></Campo>
           <Campo label="Unidad"><Entrada value={form.unidad} onChange={(e) => setForm({ ...form, unidad: e.target.value })} /></Campo>
         </div>
         <Campo label="Costo unitario (CLP)">
-          <Entrada type="number" value={form.costo_unitario} onChange={(e) => setForm({ ...form, costo_unitario: e.target.value })} />
+          <Entrada type="number" min={0} value={form.costo_unitario} onChange={(e) => setForm({ ...form, costo_unitario: e.target.value })} />
         </Campo>
+        {valoresInvalidos ? (
+          <p className="text-[11px] text-red">Stock, mínimo y costo deben ser números iguales o mayores a cero.</p>
+        ) : null}
         <Campo label="Proveedor"><Entrada value={form.proveedor} onChange={(e) => setForm({ ...form, proveedor: e.target.value })} /></Campo>
         <Campo label="Equipo asociado">
           <Seleccion value={form.maquina_id} onChange={(e) => setForm({ ...form, maquina_id: e.target.value })}>

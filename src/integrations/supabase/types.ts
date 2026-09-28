@@ -48,6 +48,7 @@ export type Database = {
           area: string | null
           cargo: string | null
           creado_en: string
+          es_tecnico: boolean
           fecha_ingreso: string | null
           id: string
           nombre: string
@@ -58,6 +59,7 @@ export type Database = {
           area?: string | null
           cargo?: string | null
           creado_en?: string
+          es_tecnico?: boolean
           fecha_ingreso?: string | null
           id?: string
           nombre: string
@@ -68,6 +70,7 @@ export type Database = {
           area?: string | null
           cargo?: string | null
           creado_en?: string
+          es_tecnico?: boolean
           fecha_ingreso?: string | null
           id?: string
           nombre?: string
