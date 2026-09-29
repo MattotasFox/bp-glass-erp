@@ -85,7 +85,6 @@ export type Database = {
           costo_unitario: number
           creado_en: string
           id: string
-          maquina_id: string | null
           nombre: string
           proveedor: string | null
           stock_actual: number
@@ -97,7 +96,6 @@ export type Database = {
           costo_unitario?: number
           creado_en?: string
           id?: string
-          maquina_id?: string | null
           nombre: string
           proveedor?: string | null
           stock_actual?: number
@@ -109,16 +107,40 @@ export type Database = {
           costo_unitario?: number
           creado_en?: string
           id?: string
-          maquina_id?: string | null
           nombre?: string
           proveedor?: string | null
           stock_actual?: number
           stock_minimo?: number
           unidad?: string
         }
+        Relationships: []
+      }
+      inventario_maquinas: {
+        Row: {
+          creado_en: string
+          insumo_id: string
+          maquina_id: string
+        }
+        Insert: {
+          creado_en?: string
+          insumo_id: string
+          maquina_id: string
+        }
+        Update: {
+          creado_en?: string
+          insumo_id?: string
+          maquina_id?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "inventario_maquina_id_fkey"
+            foreignKeyName: "inventario_maquinas_insumo_id_fkey"
+            columns: ["insumo_id"]
+            isOneToOne: false
+            referencedRelation: "inventario"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventario_maquinas_maquina_id_fkey"
             columns: ["maquina_id"]
             isOneToOne: false
             referencedRelation: "maquinas"

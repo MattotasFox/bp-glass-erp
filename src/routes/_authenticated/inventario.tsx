@@ -10,12 +10,11 @@ import {
   BotonSecundario,
   Campo,
   Entrada,
-  Seleccion,
   PanelLateral,
   Pastilla,
   Vacio,
 } from "@/components/erp/ui-bits";
-import { useInventario, useMaquinas, type Insumo } from "@/lib/datos";
+import { useInventario, useMaquinas, type InsumoConMaquinas } from "@/lib/datos";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { money } from "@/lib/format";
@@ -42,7 +41,7 @@ const vacio = {
   unidad: "u",
   costo_unitario: "0",
   proveedor: "",
-  maquina_id: "",
+  maquina_ids: [] as string[],
 };
 
 function Inventario() {
@@ -53,7 +52,7 @@ function Inventario() {
   const [busqueda, setBusqueda] = useState("");
   const [soloBajos, setSoloBajos] = useState(false);
   const [abierto, setAbierto] = useState(false);
-  const [editando, setEditando] = useState<Insumo | null>(null);
+  const [editando, setEditando] = useState<InsumoConMaquinas | null>(null);
   const [form, setForm] = useState({ ...vacio });
 
   // Stock, mínimo y costo no pueden ser negativos ni valores no numéricos.
@@ -64,12 +63,17 @@ function Inventario() {
 
   const lista = useMemo(() => {
     const t = busqueda.trim().toLowerCase();
-    return insumos.filter(
-      (i) =>
-        (!soloBajos || Number(i.stock_actual) <= Number(i.stock_minimo)) &&
-        (!t || i.nombre.toLowerCase().includes(t) || i.codigo.toLowerCase().includes(t)),
-    );
-  }, [insumos, busqueda, soloBajos]);
+    return insumos.filter((i) => {
+      if (soloBajos && Number(i.stock_actual) > Number(i.stock_minimo)) return false;
+      if (!t) return true;
+      if (i.nombre.toLowerCase().includes(t) || i.codigo.toLowerCase().includes(t)) return true;
+      // También busca por la máquina asociada al repuesto (código o nombre).
+      return i.inventario_maquinas.some((rel) => {
+        const m = maquinas.find((maq) => maq.id === rel.maquina_id);
+        return !!m && (m.codigo.toLowerCase().includes(t) || m.nombre.toLowerCase().includes(t));
+      });
+    });
+  }, [insumos, busqueda, soloBajos, maquinas]);
 
   function abrirNuevo() {
     setEditando(null);
@@ -77,7 +81,7 @@ function Inventario() {
     setAbierto(true);
   }
 
-  function abrirEdicion(i: Insumo) {
+  function abrirEdicion(i: InsumoConMaquinas) {
     setEditando(i);
     setForm({
       nombre: i.nombre,
@@ -87,7 +91,7 @@ function Inventario() {
       unidad: i.unidad,
       costo_unitario: String(i.costo_unitario),
       proveedor: i.proveedor ?? "",
-      maquina_id: i.maquina_id ?? "",
+      maquina_ids: i.inventario_maquinas.map((m) => m.maquina_id),
     });
     setAbierto(true);
   }
@@ -103,12 +107,25 @@ function Inventario() {
         unidad: form.unidad || "u",
         costo_unitario: Number(form.costo_unitario || 0),
         proveedor: form.proveedor || null,
-        maquina_id: form.maquina_id || null,
       };
-      const { error } = editando
-        ? await supabase.from("inventario").update(fila).eq("id", editando.id)
-        : await supabase.from("inventario").insert(fila);
-      if (error) throw error;
+      let insumoId = editando?.id ?? "";
+      if (editando) {
+        const { error } = await supabase.from("inventario").update(fila).eq("id", editando.id);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.from("inventario").insert(fila).select("id").single();
+        if (error) throw error;
+        insumoId = data.id;
+      }
+      // Reemplaza las máquinas asociadas: borra todas y vuelve a insertar las marcadas.
+      const { error: errBorrar } = await supabase.from("inventario_maquinas").delete().eq("insumo_id", insumoId);
+      if (errBorrar) throw errBorrar;
+      if (form.maquina_ids.length) {
+        const { error: errInsertar } = await supabase
+          .from("inventario_maquinas")
+          .insert(form.maquina_ids.map((maquina_id) => ({ insumo_id: insumoId, maquina_id })));
+        if (errInsertar) throw errInsertar;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inventario"] });
@@ -137,7 +154,7 @@ function Inventario() {
       subtitulo={`${insumos.length} referencias en bodega`}
       acciones={
         <>
-          <Buscador valor={busqueda} onChange={setBusqueda} placeholder="Nombre o código…" />
+          <Buscador valor={busqueda} onChange={setBusqueda} placeholder="Repuesto, código o máquina…" />
           <BotonSecundario onClick={() => setSoloBajos(!soloBajos)} className={soloBajos ? "ring-2 ring-red/40" : ""}>
             Bajo mínimo
           </BotonSecundario>
@@ -161,7 +178,9 @@ function Inventario() {
           <tbody className="divide-y divide-line">
             {lista.map((i) => {
               const bajo = Number(i.stock_actual) <= Number(i.stock_minimo);
-              const maquina = maquinas.find((m) => m.id === i.maquina_id);
+              const codigosMaquinas = i.inventario_maquinas
+                .map((rel) => maquinas.find((m) => m.id === rel.maquina_id)?.codigo)
+                .filter(Boolean);
               return (
                 <tr key={i.id} className="hover:bg-base/60">
                   <td className="px-5 py-3">
@@ -178,7 +197,7 @@ function Inventario() {
                   <td className="px-5 py-3 text-muted-foreground">{Number(i.stock_minimo)} {i.unidad}</td>
                   <td className="px-5 py-3">{money(i.costo_unitario)}</td>
                   <td className="px-5 py-3 text-muted-foreground">{i.proveedor ?? "—"}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{maquina?.codigo ?? "—"}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{codigosMaquinas.length ? codigosMaquinas.join(", ") : "General"}</td>
                   {esAdmin ? (
                     <td className="px-5 py-3 text-right">
                       <button onClick={() => abrirEdicion(i)} className="text-xs text-accent hover:underline">
@@ -228,13 +247,34 @@ function Inventario() {
           <p className="text-[11px] text-red">Stock, mínimo y costo deben ser números iguales o mayores a cero.</p>
         ) : null}
         <Campo label="Proveedor"><Entrada value={form.proveedor} onChange={(e) => setForm({ ...form, proveedor: e.target.value })} /></Campo>
-        <Campo label="Equipo asociado">
-          <Seleccion value={form.maquina_id} onChange={(e) => setForm({ ...form, maquina_id: e.target.value })}>
-            <option value="">Sin asociar</option>
-            {maquinas.map((m) => (
-              <option key={m.id} value={m.id}>{m.codigo} · {m.nombre}</option>
-            ))}
-          </Seleccion>
+        <Campo label="Equipos asociados">
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            Sin marcar ninguno, el repuesto es general y aparece disponible para cualquier orden de trabajo.
+          </p>
+          <div className="max-h-48 space-y-1 overflow-y-auto rounded-xl bg-base p-2 ring-1 ring-line">
+            {maquinas.length === 0 ? (
+              <p className="px-1 py-1 text-xs text-muted-foreground">No hay máquinas registradas.</p>
+            ) : (
+              maquinas.map((m) => (
+                <label key={m.id} className="flex items-center gap-2 rounded-lg px-1 py-1 text-sm hover:bg-surface">
+                  <input
+                    type="checkbox"
+                    checked={form.maquina_ids.includes(m.id)}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        maquina_ids: e.target.checked
+                          ? [...form.maquina_ids, m.id]
+                          : form.maquina_ids.filter((id) => id !== m.id),
+                      })
+                    }
+                    className="size-4 accent-[var(--accent)]"
+                  />
+                  {m.codigo} · {m.nombre}
+                </label>
+              ))
+            )}
+          </div>
         </Campo>
       </PanelLateral>
     </AppShell>

@@ -4,6 +4,7 @@ import type { Tables } from "@/integrations/supabase/types";
 
 export type Maquina = Tables<"maquinas">;
 export type Insumo = Tables<"inventario">;
+export type InsumoConMaquinas = Insumo & { inventario_maquinas: { maquina_id: string }[] };
 export type Empleado = Tables<"empleados">;
 export type Orden = Tables<"ordenes_trabajo">;
 export type OrdenInsumo = Tables<"orden_trabajo_insumos">;
@@ -36,11 +37,27 @@ export function useInventario() {
   return useQuery({
     queryKey: ["inventario"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("inventario").select("*").order("nombre");
+      const { data, error } = await supabase
+        .from("inventario")
+        .select("*, inventario_maquinas(maquina_id)")
+        .order("nombre");
       if (error) throw error;
-      return data as Insumo[];
+      return data as unknown as InsumoConMaquinas[];
     },
   });
+}
+
+// Sin máquinas asociadas = repuesto general, disponible para cualquier orden.
+export function esRepuestoGeneral(insumo: InsumoConMaquinas) {
+  return insumo.inventario_maquinas.length === 0;
+}
+
+// Repuestos que se pueden usar en una orden de la máquina indicada: los
+// generales más los asociados específicamente a esa máquina.
+export function insumosParaMaquina(insumos: InsumoConMaquinas[], maquinaId: string | undefined) {
+  return insumos.filter(
+    (i) => esRepuestoGeneral(i) || i.inventario_maquinas.some((m) => m.maquina_id === maquinaId),
+  );
 }
 
 export function useEmpleados() {

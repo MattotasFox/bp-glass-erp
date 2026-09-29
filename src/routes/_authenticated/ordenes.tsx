@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ import {
   useMaquinas,
   useEmpleados,
   useInventario,
+  insumosParaMaquina,
   useOrdenes,
   usePasosMaquina,
   costoOrden,
@@ -29,7 +30,7 @@ import {
 } from "@/lib/datos";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { fecha, money, hoyISO, etiquetaTipoOrden, tonoTipoOrden, calcularHoras } from "@/lib/format";
+import { fecha, money, hoyISO, etiquetaTipoOrden, tonoTipoOrden, calcularHoras, fechaDDMMAAAA } from "@/lib/format";
 import type { Database } from "@/integrations/supabase/types";
 
 type TipoOrden = Database["public"]["Enums"]["tipo_orden"];
@@ -51,6 +52,112 @@ export const Route = createFileRoute("/_authenticated/ordenes")({
   }),
   component: Ordenes,
 });
+
+// Hoja de mantención para imprimir al iniciar una orden. Solo se ve al imprimir
+// (ver estilos @media print más abajo); en pantalla permanece oculta.
+function HojaImpresion({
+  orden,
+  pasos,
+}: {
+  orden: OrdenCompleta;
+  pasos: { posicion: number; descripcion: string }[];
+}) {
+  const tieneDetalle = pasos.length > 0;
+
+  return (
+    <div id="hoja-impresion-orden">
+      <style>{`
+        @media screen {
+          #hoja-impresion-orden { display: none; }
+        }
+        @media print {
+          @page { margin: 16mm; }
+          body * { visibility: hidden; }
+          #hoja-impresion-orden, #hoja-impresion-orden * { visibility: visible; }
+          #hoja-impresion-orden {
+            display: block;
+            position: absolute;
+            inset: 0;
+            font-family: "Times New Roman", Georgia, serif;
+            color: #000;
+            background: #fff;
+          }
+          #hoja-impresion-orden .hi-fecha { text-align: right; font-size: 11pt; }
+          #hoja-impresion-orden h1 { font-size: 22pt; font-weight: normal; margin: 4pt 0 2pt; }
+          #hoja-impresion-orden .hi-subtitulo { font-size: 13pt; margin: 0 0 16pt; }
+          #hoja-impresion-orden .hi-campo { font-size: 12pt; margin: 10pt 0; }
+          #hoja-impresion-orden .hi-linea {
+            display: inline-block;
+            min-width: 260pt;
+            border-bottom: 1pt solid #000;
+            padding-bottom: 1pt;
+          }
+          #hoja-impresion-orden .hi-linea-corta {
+            display: inline-block;
+            min-width: 140pt;
+            border-bottom: 1pt solid #000;
+            padding-bottom: 1pt;
+          }
+          #hoja-impresion-orden h2 { font-size: 14pt; font-weight: normal; margin: 18pt 0 10pt; }
+          #hoja-impresion-orden ol { list-style: none; margin: 0; padding: 0; }
+          #hoja-impresion-orden ol li {
+            display: flex;
+            align-items: baseline;
+            gap: 10pt;
+            font-size: 12pt;
+            margin: 9pt 0;
+          }
+          #hoja-impresion-orden .hi-texto-paso { flex: 1; }
+          #hoja-impresion-orden .hi-casillero {
+            width: 13pt;
+            height: 13pt;
+            border: 1.3pt solid #000;
+            flex-shrink: 0;
+          }
+          #hoja-impresion-orden .hi-caja {
+            border: 1.3pt solid #000;
+            min-height: 70pt;
+            margin-top: 6pt;
+          }
+          #hoja-impresion-orden .hi-caja-grande { min-height: 260pt; }
+        }
+      `}</style>
+
+      <div className="hi-fecha">FECHA {fechaDDMMAAAA()}</div>
+      <h1>{orden.maquinas?.nombre ?? "Máquina"}</h1>
+      <div className="hi-subtitulo">
+        {etiquetaTipoOrden(orden.tipo)} · Orden #{orden.folio}
+      </div>
+
+      <div className="hi-campo">Nombre: <span className="hi-linea">{orden.empleados?.nombre ?? ""}</span></div>
+      <div className="hi-campo">
+        Hora Inicio: <span className="hi-linea-corta"></span>
+        {"   "}Hora Termino: <span className="hi-linea-corta"></span>
+      </div>
+
+      {tieneDetalle ? (
+        <>
+          <h2>Detalle:</h2>
+          <ol>
+            {pasos.map((p) => (
+              <li key={p.posicion}>
+                <span className="hi-texto-paso">{p.posicion}. {p.descripcion}</span>
+                <span className="hi-casillero" />
+              </li>
+            ))}
+          </ol>
+          <h2>Observaciones:</h2>
+          <div className="hi-caja" />
+        </>
+      ) : (
+        <>
+          <h2>Detalles:</h2>
+          <div className="hi-caja hi-caja-grande" />
+        </>
+      )}
+    </div>
+  );
+}
 
 const nuevaVacia = {
   maquina_id: "",
@@ -74,6 +181,39 @@ function Ordenes() {
   const [filtro, setFiltro] = useState("todas");
   const [nueva, setNueva] = useState<typeof nuevaVacia | null>(null);
   const [cierre, setCierre] = useState<OrdenCompleta | null>(null);
+
+  // Al cerrar una orden solo se pueden declarar repuestos generales o asociados a su máquina.
+  const insumosDisponibles = useMemo(() => insumosParaMaquina(insumos, cierre?.maquina_id), [insumos, cierre]);
+
+  // Hoja para imprimir al iniciar una orden: se cargan los pasos que correspondan
+  // a su frecuencia (diaria/mensual); las correctivas no tienen pasos que cargar.
+  const [imprimir, setImprimir] = useState<OrdenCompleta | null>(null);
+  const frecuenciaImprimir =
+    imprimir?.tipo === "preventiva_diaria" ? "diaria" : imprimir?.tipo === "preventiva_mensual" ? "mensual" : null;
+  const { data: pasosMaquinaImprimir = [], isLoading: cargandoPasosImprimir } = usePasosMaquina(
+    frecuenciaImprimir ? imprimir?.maquina_id : undefined,
+  );
+  const pasosImprimir = useMemo(
+    () =>
+      pasosMaquinaImprimir
+        .filter((p) => p.frecuencia === frecuenciaImprimir)
+        .sort((a, b) => a.posicion - b.posicion),
+    [pasosMaquinaImprimir, frecuenciaImprimir],
+  );
+
+  useEffect(() => {
+    if (!imprimir) return;
+    if (frecuenciaImprimir && cargandoPasosImprimir) return; // esperando a que carguen los pasos
+    window.print();
+    const limpiar = () => setImprimir(null);
+    window.addEventListener("afterprint", limpiar);
+    return () => window.removeEventListener("afterprint", limpiar);
+  }, [imprimir, frecuenciaImprimir, cargandoPasosImprimir]);
+
+  function iniciarOrden(o: OrdenCompleta) {
+    cambiarEstado.mutate({ id: o.id, estado: "en_proceso" });
+    setImprimir(o);
+  }
   const [cierreForm, setCierreForm] = useState({
     fecha_ejecucion: hoyISO(),
     hora_inicio: "",
@@ -299,6 +439,7 @@ function Ordenes() {
     horasCierre * Number(empleados.find((e) => e.id === cierre?.tecnico_id)?.tarifa_hora ?? 0);
 
   return (
+    <>
     <AppShell
       titulo="Órdenes de trabajo"
       subtitulo={`${ordenes.filter((o) => o.estado === "pendiente" || o.estado === "reprogramada").length} pendientes de ejecución`}
@@ -354,7 +495,7 @@ function Ordenes() {
                     <div className="flex justify-end gap-3">
                       {o.estado === "pendiente" || o.estado === "reprogramada" ? (
                         <button
-                          onClick={() => cambiarEstado.mutate({ id: o.id, estado: "en_proceso" })}
+                          onClick={() => iniciarOrden(o)}
                           className="text-xs text-muted-foreground hover:underline"
                         >
                           Iniciar
@@ -536,7 +677,7 @@ function Ordenes() {
                       className="flex-1"
                     >
                       <option value="">Selecciona repuesto</option>
-                      {insumos.map((i) => (
+                      {insumosDisponibles.map((i) => (
                         <option key={i.id} value={i.id}>
                           {i.codigo} · {i.nombre} ({Number(i.stock_actual)} {i.unidad})
                         </option>
@@ -683,5 +824,7 @@ function Ordenes() {
         ) : null}
       </PanelLateral>
     </AppShell>
+    {imprimir ? <HojaImpresion orden={imprimir} pasos={pasosImprimir} /> : null}
+    </>
   );
 }

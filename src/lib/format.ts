@@ -36,6 +36,13 @@ export function nivelMantencion(fechaProxima: string | null | undefined): NivelM
   return "al_dia";
 }
 
+// Fecha numérica DD/MM/AAAA, para documentos impresos.
+export function fechaDDMMAAAA(valor: Date = new Date()) {
+  const dd = String(valor.getDate()).padStart(2, "0");
+  const mm = String(valor.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${valor.getFullYear()}`;
+}
+
 export function etiquetaTipoOrden(tipo: string) {
   if (tipo === "preventiva_diaria") return "Preventiva diaria";
   if (tipo === "preventiva_mensual") return "Preventiva mensual";
