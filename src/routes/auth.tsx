@@ -95,14 +95,14 @@ function AuthPage() {
         </div>
         <div>
           <h2 className="max-w-sm font-serif text-4xl leading-tight text-surface">
-            Mantenimiento industrial, ordenado y al día.
+            Mantenimiento
           </h2>
           <p className="mt-4 max-w-sm text-sm text-sidebar-foreground/60">
-            Maquinaria, repuestos, órdenes de trabajo y costos en un solo lugar.
+            Agregando
           </p>
         </div>
         <div className="font-mono text-[10px] uppercase tracking-widest text-sidebar-foreground/40">
-          Acceso restringido al personal autorizado
+          Acceso restringido BP Glass
         </div>
       </div>
 
