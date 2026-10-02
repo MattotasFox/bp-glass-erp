@@ -83,27 +83,13 @@ function AuthPage() {
 
   return (
     <div className="grid min-h-screen bg-base font-sans text-ink antialiased md:grid-cols-[1.1fr_1fr]">
-      <div className="hidden flex-col justify-between bg-sidebar p-10 text-sidebar-foreground md:flex">
-        <div className="flex items-center gap-2.5">
-          <div className="grid size-9 place-items-center rounded-xl bg-clay text-sidebar">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-5">
-              <circle cx="12" cy="12" r="3.2" />
-              <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.4 5.4l2.1 2.1M16.5 16.5l2.1 2.1M18.6 5.4l-2.1 2.1M7.5 16.5l-2.1 2.1" />
-            </svg>
-          </div>
-          <div className="text-sm font-semibold tracking-tight text-surface">BP Glass</div>
+      <div className="hidden flex-col items-center justify-center gap-8 bg-sidebar p-10 md:flex">
+        <div className="w-full max-w-sm rounded-3xl bg-surface p-3 shadow-clay">
+          <img src="/assets/logo.png" alt="BP Glass" className="w-full rounded-2xl" />
         </div>
-        <div>
-          <h2 className="max-w-sm font-serif text-4xl leading-tight text-surface">
-            Mantenimiento industrial, ordenado y al día.
-          </h2>
-          <p className="mt-4 max-w-sm text-sm text-sidebar-foreground/60">
-            Maquinaria, repuestos, órdenes de trabajo y costos en un solo lugar.
-          </p>
-        </div>
-        <div className="font-mono text-[10px] uppercase tracking-widest text-sidebar-foreground/40">
+        <p className="font-mono text-[10px] uppercase tracking-widest text-sidebar-foreground/40">
           Acceso restringido al personal autorizado
-        </div>
+        </p>
       </div>
 
       <div className="flex items-center justify-center p-6">
