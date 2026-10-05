@@ -43,7 +43,6 @@ const vacio = {
   marca: "",
   modelo: "",
   anio: "",
-  foto_url: "",
   estado: "operativa",
   periodicidad_dias: "30",
   fecha_ultima_mantencion: "",
@@ -205,7 +204,6 @@ function Maquinaria() {
       marca: m.marca ?? "",
       modelo: m.modelo ?? "",
       anio: m.anio ? String(m.anio) : "",
-      foto_url: m.foto_url ?? "",
       estado: m.estado,
       periodicidad_dias: String(m.periodicidad_dias),
       fecha_ultima_mantencion: m.fecha_ultima_mantencion ?? "",
@@ -239,7 +237,6 @@ function Maquinaria() {
         marca: form.marca || null,
         modelo: form.modelo || null,
         anio: form.anio ? Number(form.anio) : null,
-        foto_url: form.foto_url || null,
         estado: form.estado as Maquina["estado"],
         periodicidad_dias: Number(form.periodicidad_dias || 30),
         fecha_ultima_mantencion: form.fecha_ultima_mantencion || null,
@@ -398,7 +395,6 @@ function Maquinaria() {
           <Campo label="Modelo"><Entrada value={form.modelo} onChange={(e) => setForm({ ...form, modelo: e.target.value })} /></Campo>
         </div>
         <Campo label="Año"><Entrada type="number" value={form.anio} onChange={(e) => setForm({ ...form, anio: e.target.value })} /></Campo>
-        <Campo label="Foto (URL)"><Entrada value={form.foto_url} onChange={(e) => setForm({ ...form, foto_url: e.target.value })} /></Campo>
         <div className="grid grid-cols-2 gap-3">
           <Campo label="Estado">
             <Seleccion value={form.estado} onChange={(e) => setForm({ ...form, estado: e.target.value })}>

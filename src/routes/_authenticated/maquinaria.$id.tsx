@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/erp/AppShell";
 import { Tarjeta, TituloSeccion, EstadoMaquina, EstadoOrden, Vacio, Pastilla } from "@/components/erp/ui-bits";
@@ -24,6 +25,48 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
       <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{etiqueta}</div>
       <div className="mt-1 text-sm">{valor}</div>
     </div>
+  );
+}
+
+// Busca la foto de la máquina en /assets por nombre de archivo, probando variantes
+// (con/sin tildes, mayúsculas/minúsculas, distintas extensiones) para no depender
+// de que el nombre del archivo calce exacto.
+const EXTENSIONES_FOTO = ["png", "jpg", "jpeg", "webp"];
+
+function variantesRutaFoto(nombre: string): string[] {
+  const sinTildes = nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const candidatos = [nombre, sinTildes, nombre.toLowerCase(), sinTildes.toLowerCase()];
+  const vistos = new Set<string>();
+  const rutas: string[] = [];
+  for (const c of candidatos) {
+    if (vistos.has(c)) continue;
+    vistos.add(c);
+    for (const ext of EXTENSIONES_FOTO) rutas.push(`/assets/${c}.${ext}`);
+  }
+  return rutas;
+}
+
+function FotoMaquina({ nombre }: { nombre: string }) {
+  const rutas = useMemo(() => variantesRutaFoto(nombre), [nombre]);
+  const [intento, setIntento] = useState(0);
+
+  if (intento >= rutas.length) {
+    return (
+      <div className="grid h-full place-items-center text-[10px] uppercase tracking-widest text-muted-foreground">
+        Sin foto
+      </div>
+    );
+  }
+
+  return (
+    <img
+      key={rutas[intento]}
+      src={rutas[intento]}
+      alt={`Fotografía de ${nombre}`}
+      className="h-full w-full object-cover"
+      loading="lazy"
+      onError={() => setIntento((i) => i + 1)}
+    />
   );
 }
 
@@ -61,11 +104,7 @@ function FichaMaquina() {
         <Tarjeta className="p-5">
           <div className="flex flex-col gap-5 sm:flex-row">
             <div className="h-32 w-full shrink-0 overflow-hidden rounded-xl bg-base ring-1 ring-line sm:w-40">
-              {maquina.foto_url ? (
-                <img src={maquina.foto_url} alt={`Fotografía de ${maquina.nombre}`} className="h-full w-full object-cover" loading="lazy" />
-              ) : (
-                <div className="grid h-full place-items-center text-[10px] uppercase tracking-widest text-muted-foreground">Sin foto</div>
-              )}
+              <FotoMaquina nombre={maquina.nombre} />
             </div>
             <div className="grid min-w-0 flex-1 grid-cols-3 gap-4">
               <Dato etiqueta="Año" valor={maquina.anio ? String(maquina.anio) : "—"} />
