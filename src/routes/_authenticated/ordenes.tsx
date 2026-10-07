@@ -116,10 +116,23 @@ function HojaImpresion({
           }
           #hoja-impresion-orden .hi-caja {
             border: 1.3pt solid #000;
-            min-height: 70pt;
+            min-height: 110pt;
             margin-top: 6pt;
           }
           #hoja-impresion-orden .hi-caja-grande { min-height: 260pt; }
+          #hoja-impresion-orden .hi-firma {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 200pt;
+            text-align: center;
+          }
+          #hoja-impresion-orden .hi-firma-linea {
+            border-bottom: 1pt solid #000;
+            height: 0;
+            margin-bottom: 4pt;
+          }
+          #hoja-impresion-orden .hi-firma-texto { font-size: 11pt; }
         }
       `}</style>
 
@@ -129,7 +142,7 @@ function HojaImpresion({
         {etiquetaTipoOrden(orden.tipo)} · Orden #{orden.folio}
       </div>
 
-      <div className="hi-campo">Nombre: <span className="hi-linea">{orden.empleados?.nombre ?? ""}</span></div>
+      <div className="hi-campo">Nombre: {orden.empleados?.nombre ?? ""}</div>
       <div className="hi-campo">
         Hora Inicio: <span className="hi-linea-corta"></span>
         {"   "}Hora Termino: <span className="hi-linea-corta"></span>
@@ -148,13 +161,22 @@ function HojaImpresion({
           </ol>
           <h2>Observaciones:</h2>
           <div className="hi-caja" />
+          <h2>Repuestos:</h2>
+          <div className="hi-caja" />
         </>
       ) : (
         <>
           <h2>Detalles:</h2>
           <div className="hi-caja hi-caja-grande" />
+          <h2>Repuestos:</h2>
+          <div className="hi-caja" />
         </>
       )}
+
+      <div className="hi-firma">
+        <div className="hi-firma-linea" />
+        <div className="hi-firma-texto">Firma</div>
+      </div>
     </div>
   );
 }

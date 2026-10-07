@@ -147,12 +147,7 @@ export function AppShell({
         )}
       >
         <div className="flex items-center gap-2.5 px-5 pb-4 pt-5">
-          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-clay text-sidebar shadow-clay-sm">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-5">
-              <circle cx="12" cy="12" r="3.2" />
-              <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.4 5.4l2.1 2.1M16.5 16.5l2.1 2.1M18.6 5.4l-2.1 2.1M7.5 16.5l-2.1 2.1" />
-            </svg>
-          </div>
+          <img src="/favicon-256.png" alt="BP Glass" className="size-9 shrink-0 object-contain" />
           <div className="leading-tight">
             <div className="text-sm font-semibold tracking-tight text-surface">BP Glass</div>
             <div className="font-mono text-[10px] uppercase tracking-widest text-sidebar-foreground/50">
