@@ -20,7 +20,6 @@ import { Route as AuthenticatedReportesRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
 import { Route as AuthenticatedMaquinariaIndexRouteImport } from './routes/_authenticated/maquinaria.index'
 import { Route as AuthenticatedMaquinariaIdRouteImport } from './routes/_authenticated/maquinaria.$id'
-import { Route as AuthenticatedOrdenesIdRouteImport } from './routes/_authenticated/ordenes.id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -78,23 +77,17 @@ const AuthenticatedMaquinariaIdRoute =
     path: '/maquinaria/$id',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedOrdenesIdRoute = AuthenticatedOrdenesIdRouteImport.update({
-  id: '/id',
-  path: '/id',
-  getParentRoute: () => AuthenticatedOrdenesRoute,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/empleados': typeof AuthenticatedEmpleadosRoute
   '/inventario': typeof AuthenticatedInventarioRoute
-  '/ordenes': typeof AuthenticatedOrdenesRouteWithChildren
+  '/ordenes': typeof AuthenticatedOrdenesRoute
   '/panel': typeof AuthenticatedPanelRoute
   '/reportes': typeof AuthenticatedReportesRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
   '/maquinaria/$id': typeof AuthenticatedMaquinariaIdRoute
-  '/ordenes/id': typeof AuthenticatedOrdenesIdRoute
   '/maquinaria/': typeof AuthenticatedMaquinariaIndexRoute
 }
 export interface FileRoutesByTo {
@@ -102,12 +95,11 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/empleados': typeof AuthenticatedEmpleadosRoute
   '/inventario': typeof AuthenticatedInventarioRoute
-  '/ordenes': typeof AuthenticatedOrdenesRouteWithChildren
+  '/ordenes': typeof AuthenticatedOrdenesRoute
   '/panel': typeof AuthenticatedPanelRoute
   '/reportes': typeof AuthenticatedReportesRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
   '/maquinaria/$id': typeof AuthenticatedMaquinariaIdRoute
-  '/ordenes/id': typeof AuthenticatedOrdenesIdRoute
   '/maquinaria': typeof AuthenticatedMaquinariaIndexRoute
 }
 export interface FileRoutesById {
@@ -117,12 +109,11 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/empleados': typeof AuthenticatedEmpleadosRoute
   '/_authenticated/inventario': typeof AuthenticatedInventarioRoute
-  '/_authenticated/ordenes': typeof AuthenticatedOrdenesRouteWithChildren
+  '/_authenticated/ordenes': typeof AuthenticatedOrdenesRoute
   '/_authenticated/panel': typeof AuthenticatedPanelRoute
   '/_authenticated/reportes': typeof AuthenticatedReportesRoute
   '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
   '/_authenticated/maquinaria/$id': typeof AuthenticatedMaquinariaIdRoute
-  '/_authenticated/ordenes/id': typeof AuthenticatedOrdenesIdRoute
   '/_authenticated/maquinaria/': typeof AuthenticatedMaquinariaIndexRoute
 }
 export interface FileRouteTypes {
@@ -137,7 +128,6 @@ export interface FileRouteTypes {
     | '/reportes'
     | '/usuarios'
     | '/maquinaria/$id'
-    | '/ordenes/id'
     | '/maquinaria/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -150,7 +140,6 @@ export interface FileRouteTypes {
     | '/reportes'
     | '/usuarios'
     | '/maquinaria/$id'
-    | '/ordenes/id'
     | '/maquinaria'
   id:
     | '__root__'
@@ -164,7 +153,6 @@ export interface FileRouteTypes {
     | '/_authenticated/reportes'
     | '/_authenticated/usuarios'
     | '/_authenticated/maquinaria/$id'
-    | '/_authenticated/ordenes/id'
     | '/_authenticated/maquinaria/'
   fileRoutesById: FileRoutesById
 }
@@ -253,31 +241,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMaquinariaIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/ordenes/id': {
-      id: '/_authenticated/ordenes/id'
-      path: '/id'
-      fullPath: '/ordenes/id'
-      preLoaderRoute: typeof AuthenticatedOrdenesIdRouteImport
-      parentRoute: typeof AuthenticatedOrdenesRoute
-    }
   }
 }
-
-interface AuthenticatedOrdenesRouteChildren {
-  AuthenticatedOrdenesIdRoute: typeof AuthenticatedOrdenesIdRoute
-}
-
-const AuthenticatedOrdenesRouteChildren: AuthenticatedOrdenesRouteChildren = {
-  AuthenticatedOrdenesIdRoute: AuthenticatedOrdenesIdRoute,
-}
-
-const AuthenticatedOrdenesRouteWithChildren =
-  AuthenticatedOrdenesRoute._addFileChildren(AuthenticatedOrdenesRouteChildren)
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedEmpleadosRoute: typeof AuthenticatedEmpleadosRoute
   AuthenticatedInventarioRoute: typeof AuthenticatedInventarioRoute
-  AuthenticatedOrdenesRoute: typeof AuthenticatedOrdenesRouteWithChildren
+  AuthenticatedOrdenesRoute: typeof AuthenticatedOrdenesRoute
   AuthenticatedPanelRoute: typeof AuthenticatedPanelRoute
   AuthenticatedReportesRoute: typeof AuthenticatedReportesRoute
   AuthenticatedUsuariosRoute: typeof AuthenticatedUsuariosRoute
@@ -288,7 +258,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedEmpleadosRoute: AuthenticatedEmpleadosRoute,
   AuthenticatedInventarioRoute: AuthenticatedInventarioRoute,
-  AuthenticatedOrdenesRoute: AuthenticatedOrdenesRouteWithChildren,
+  AuthenticatedOrdenesRoute: AuthenticatedOrdenesRoute,
   AuthenticatedPanelRoute: AuthenticatedPanelRoute,
   AuthenticatedReportesRoute: AuthenticatedReportesRoute,
   AuthenticatedUsuariosRoute: AuthenticatedUsuariosRoute,

@@ -99,7 +99,7 @@ function AuthPage() {
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {modo === "entrar"
-              ? "Ingresa con tu correo."
+              ? "Ingresa con tu correo corporativo."
               : "El primer usuario del sistema queda como administrador."}
           </p>
 

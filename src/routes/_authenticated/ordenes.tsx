@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/erp/AppShell";
@@ -500,14 +500,10 @@ function Ordenes() {
           <tbody className="divide-y divide-line">
             {lista.map((o) => (
               <tr key={o.id} className="hover:bg-base/60">
-                <td className="px-5 py-3 font-mono text-xs text-muted-foreground">
-                  <Link to="/ordenes/$id" params={{ id: o.id }} className="hover:underline">#{o.folio}</Link>
-                </td>
+                <td className="px-5 py-3 font-mono text-xs text-muted-foreground">#{o.folio}</td>
                 <td className="px-5 py-3">
-                  <Link to="/ordenes/$id" params={{ id: o.id }} className="block">
-                    <div className="font-medium">{o.maquinas?.nombre ?? "—"}</div>
-                    <div className="font-mono text-[11px] text-muted-foreground">{o.maquinas?.codigo ?? ""}</div>
-                  </Link>
+                  <div className="font-medium">{o.maquinas?.nombre ?? "—"}</div>
+                  <div className="font-mono text-[11px] text-muted-foreground">{o.maquinas?.codigo ?? ""}</div>
                 </td>
                 <td className="px-5 py-3">
                   <Pastilla tono={tonoTipoOrden(o.tipo)}>{etiquetaTipoOrden(o.tipo)}</Pastilla>
