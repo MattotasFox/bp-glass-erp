@@ -432,7 +432,11 @@ export type Database = {
       estado_maquina: "operativa" | "en_mantencion" | "fuera_de_servicio"
       estado_orden: "pendiente" | "en_proceso" | "completada" | "reprogramada"
       frecuencia_paso: "diaria" | "mensual"
-      tipo_orden: "preventiva" | "preventiva_diaria" | "preventiva_mensual" | "correctiva"
+      tipo_orden:
+        | "preventiva"
+        | "correctiva"
+        | "preventiva_diaria"
+        | "preventiva_mensual"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -564,7 +568,12 @@ export const Constants = {
       estado_maquina: ["operativa", "en_mantencion", "fuera_de_servicio"],
       estado_orden: ["pendiente", "en_proceso", "completada", "reprogramada"],
       frecuencia_paso: ["diaria", "mensual"],
-      tipo_orden: ["preventiva", "preventiva_diaria", "preventiva_mensual", "correctiva"],
+      tipo_orden: [
+        "preventiva",
+        "correctiva",
+        "preventiva_diaria",
+        "preventiva_mensual",
+      ],
     },
   },
 } as const
