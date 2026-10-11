@@ -203,6 +203,8 @@ function Ordenes() {
   const [filtro, setFiltro] = useState("todas");
   const [nueva, setNueva] = useState<typeof nuevaVacia | null>(null);
   const [cierre, setCierre] = useState<OrdenCompleta | null>(null);
+  const [detalleId, setDetalleId] = useState<string | null>(null);
+  const detalle = ordenes.find((o) => o.id === detalleId) ?? null;
 
   // Al cerrar una orden solo se pueden declarar repuestos generales o asociados a su máquina.
   const insumosDisponibles = useMemo(() => insumosParaMaquina(insumos, cierre?.maquina_id), [insumos, cierre]);
@@ -499,7 +501,11 @@ function Ordenes() {
           </thead>
           <tbody className="divide-y divide-line">
             {lista.map((o) => (
-              <tr key={o.id} className="hover:bg-base/60">
+              <tr
+                key={o.id}
+                onClick={() => setDetalleId(o.id)}
+                className="cursor-pointer hover:bg-base/60"
+              >
                 <td className="px-5 py-3 font-mono text-xs text-muted-foreground">#{o.folio}</td>
                 <td className="px-5 py-3">
                   <div className="font-medium">{o.maquinas?.nombre ?? "—"}</div>
@@ -512,7 +518,7 @@ function Ordenes() {
                 <td className="px-5 py-3 text-muted-foreground">{o.empleados?.nombre ?? "Sin asignar"}</td>
                 <td className="px-5 py-3"><EstadoOrden estado={o.estado} /></td>
                 <td className="px-5 py-3">{money(costoOrden(o).total)}</td>
-                <td className="px-5 py-3 text-right">
+                <td className="px-5 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                   {puedeEditar && o.estado !== "completada" ? (
                     <div className="flex justify-end gap-3">
                       {o.estado === "pendiente" || o.estado === "reprogramada" ? (
@@ -544,6 +550,127 @@ function Ordenes() {
         </table>
         {!isLoading && lista.length === 0 ? <Vacio mensaje="Sin órdenes para este filtro." /> : null}
       </Tarjeta>
+
+      <PanelLateral
+        abierto={detalle !== null}
+        titulo={detalle ? `Orden #${detalle.folio}` : ""}
+        subtitulo={detalle ? `${detalle.maquinas?.nombre ?? "—"} · ${detalle.maquinas?.codigo ?? ""}` : ""}
+        onCerrar={() => setDetalleId(null)}
+        pie={
+          detalle ? (
+            <div className="flex flex-wrap gap-2">
+              {puedeEditar && (detalle.estado === "pendiente" || detalle.estado === "reprogramada") ? (
+                <BotonSecundario onClick={() => iniciarOrden(detalle)}>Iniciar e imprimir</BotonSecundario>
+              ) : null}
+              {puedeEditar && detalle.estado !== "completada" ? (
+                <>
+                  <BotonPrincipal
+                    onClick={() => {
+                      setDetalleId(null);
+                      abrirCierre(detalle);
+                    }}
+                  >
+                    Cerrar orden
+                  </BotonPrincipal>
+                  <BotonSecundario
+                    onClick={() => {
+                      setDetalleId(null);
+                      setReprogramar({ orden: detalle, fechaNueva: manianaISO(), motivo: "", pendientes: [] });
+                    }}
+                  >
+                    Reprogramar
+                  </BotonSecundario>
+                </>
+              ) : null}
+              {detalle.estado === "completada" ? (
+                <BotonSecundario onClick={() => setImprimir(detalle)}>Imprimir hoja</BotonSecundario>
+              ) : null}
+              {esAdmin && detalle.estado === "completada" ? (
+                <button
+                  onClick={() => {
+                    setDetalleId(null);
+                    confirmarEliminar(detalle);
+                  }}
+                  className="px-2 text-xs text-red hover:underline"
+                >
+                  Eliminar
+                </button>
+              ) : null}
+            </div>
+          ) : null
+        }
+      >
+        {detalle ? (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <EstadoOrden estado={detalle.estado} />
+              <Pastilla tono={tonoTipoOrden(detalle.tipo)}>{etiquetaTipoOrden(detalle.tipo)}</Pastilla>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              {[
+                ["Programada", fecha(detalle.fecha_programada)],
+                ["Ejecutada", detalle.fecha_ejecucion ? fecha(detalle.fecha_ejecucion) : "—"],
+                ["Técnico", detalle.empleados?.nombre ?? "Sin asignar"],
+                ["Horario", detalle.hora_inicio ? `${detalle.hora_inicio.slice(0, 5)} – ${detalle.hora_termino?.slice(0, 5) ?? "…"}` : "—"],
+                ["Horas hombre", `${Number(detalle.horas_mano_obra ?? 0)} h`],
+                ["Creada", fecha(detalle.creado_en.slice(0, 10))],
+              ].map(([k, v]) => (
+                <div key={k}>
+                  <dt className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{k}</dt>
+                  <dd className="mt-0.5">{v}</dd>
+                </div>
+              ))}
+            </dl>
+            <div>
+              <TituloSeccion>Descripción</TituloSeccion>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{detalle.descripcion || "Sin descripción."}</p>
+            </div>
+            {detalle.observaciones ? (
+              <div>
+                <TituloSeccion>Observaciones</TituloSeccion>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{detalle.observaciones}</p>
+              </div>
+            ) : null}
+            {detalle.orden_trabajo_pasos.length > 0 ? (
+              <div>
+                <TituloSeccion>Pasos registrados</TituloSeccion>
+                <ol className="mt-1 list-decimal space-y-1 pl-5 text-sm">
+                  {[...detalle.orden_trabajo_pasos]
+                    .sort((a, b) => a.posicion - b.posicion)
+                    .map((p) => (
+                      <li key={p.id}>{p.descripcion}</li>
+                    ))}
+                </ol>
+              </div>
+            ) : null}
+            <div>
+              <TituloSeccion>Repuestos usados</TituloSeccion>
+              {detalle.orden_trabajo_insumos.length === 0 ? (
+                <p className="mt-1 text-sm text-muted-foreground">Ninguno.</p>
+              ) : (
+                <ul className="mt-1 divide-y divide-line text-sm">
+                  {detalle.orden_trabajo_insumos.map((i) => (
+                    <li key={i.id} className="flex justify-between gap-2 py-1.5">
+                      <span>
+                        {i.inventario?.nombre ?? "—"}{" "}
+                        <span className="text-muted-foreground">
+                          × {Number(i.cantidad_usada)} {i.inventario?.unidad ?? ""}
+                        </span>
+                      </span>
+                      <span>{money(Number(i.cantidad_usada) * Number(i.costo_al_momento))}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="space-y-1 rounded-lg bg-base p-3 text-sm ring-1 ring-line">
+              <div className="flex justify-between"><span className="text-muted-foreground">Repuestos</span><span>{money(costoOrden(detalle).insumos)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Mano de obra</span><span>{money(costoOrden(detalle).manoObra)}</span></div>
+              <div className="flex justify-between font-medium"><span>Total</span><span>{money(costoOrden(detalle).total)}</span></div>
+            </div>
+          </>
+        ) : null}
+      </PanelLateral>
 
       <PanelLateral
         abierto={nueva !== null}
