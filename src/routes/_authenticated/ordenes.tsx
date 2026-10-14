@@ -118,6 +118,8 @@ function HojaImpresion({
             border: 1.3pt solid #000;
             min-height: 110pt;
             margin-top: 6pt;
+            padding: 6pt;
+            white-space: pre-wrap;
           }
           #hoja-impresion-orden .hi-caja-grande { min-height: 260pt; }
           #hoja-impresion-orden .hi-firma {
@@ -167,7 +169,11 @@ function HojaImpresion({
       ) : (
         <>
           <h2>Detalles:</h2>
-          <div className="hi-caja hi-caja-grande" />
+          {orden.descripcion ? (
+            <div className="hi-caja hi-caja-grande hi-caja-texto">{orden.descripcion}</div>
+          ) : (
+            <div className="hi-caja hi-caja-grande" />
+          )}
           <h2>Repuestos:</h2>
           <div className="hi-caja" />
         </>
