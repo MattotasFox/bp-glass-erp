@@ -167,7 +167,11 @@ function HojaImpresion({
       ) : (
         <>
           <h2>Detalles:</h2>
-          <div className="hi-caja hi-caja-grande" />
+          {orden.descripcion ? (
+            <div className="hi-caja hi-caja-grande hi-caja-texto">{orden.descripcion}</div>
+          ) : (
+            <div className="hi-caja hi-caja-grande" />
+          )}
           <h2>Repuestos:</h2>
           <div className="hi-caja" />
         </>
