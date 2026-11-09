@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
+import { iniciarSesion } from "@/lib/cuentas.functions";
 import { BotonPrincipal, Campo, Entrada } from "@/components/erp/ui-bits";
 
 export const Route = createFileRoute("/auth")({
@@ -30,54 +30,25 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [modo, setModo] = useState<"entrar" | "crear">("entrar");
-  const [email, setEmail] = useState("");
+  const [identificador, setIdentificador] = useState("");
   const [clave, setClave] = useState("");
-  const [nombre, setNombre] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setAviso(null);
     setCargando(true);
     try {
-      if (modo === "entrar") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password: clave });
-        if (error) throw error;
-        queryClient.removeQueries({ queryKey: ["sesion"] });
-        navigate({ to: "/panel", replace: true });
-      } else {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password: clave,
-          options: {
-            data: { nombre },
-            emailRedirectTo: `${window.location.origin}/panel`,
-          },
-        });
-        if (error) throw error;
-        if (data.session) {
-          queryClient.removeQueries({ queryKey: ["sesion"] });
-          navigate({ to: "/panel", replace: true });
-        }
-        else setAviso("Cuenta creada. Revisa tu correo para confirmarla y luego ingresa.");
-      }
+      const tokens = await iniciarSesion({ data: { identificador, clave } });
+      const { error } = await supabase.auth.setSession(tokens);
+      if (error) throw error;
+      queryClient.removeQueries({ queryKey: ["sesion"] });
+      navigate({ to: "/panel", replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo completar la operación");
+      setError(err instanceof Error ? err.message : "No se pudo iniciar sesión");
     } finally {
       setCargando(false);
-    }
-  }
-
-  async function google() {
-    setError(null);
-    try {
-      await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo iniciar con Google");
     }
   }
 
@@ -94,28 +65,18 @@ function AuthPage() {
 
       <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
-          <h1 className="font-serif text-3xl tracking-tight">
-            {modo === "entrar" ? "Iniciar sesión" : "Crear cuenta"}
-          </h1>
+          <h1 className="font-serif text-3xl tracking-tight">Iniciar sesión</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            {modo === "entrar"
-              ? "Ingresa con tu correo corporativo."
-              : "El primer usuario del sistema queda como administrador."}
+            Ingresa con tu nombre de usuario o correo. Las cuentas las crea el administrador.
           </p>
 
           <form onSubmit={enviar} className="mt-6 space-y-4">
-            {modo === "crear" ? (
-              <Campo label="Nombre completo">
-                <Entrada value={nombre} onChange={(e) => setNombre(e.target.value)} required />
-              </Campo>
-            ) : null}
-            <Campo label="Correo">
+            <Campo label="Usuario o correo">
               <Entrada
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={identificador}
+                onChange={(e) => setIdentificador(e.target.value)}
                 required
-                autoComplete="email"
+                autoComplete="username"
               />
             </Campo>
             <Campo label="Contraseña">
@@ -124,40 +85,16 @@ function AuthPage() {
                 value={clave}
                 onChange={(e) => setClave(e.target.value)}
                 required
-                minLength={6}
-                autoComplete={modo === "entrar" ? "current-password" : "new-password"}
+                autoComplete="current-password"
               />
             </Campo>
 
             {error ? <p className="text-xs text-red">{error}</p> : null}
-            {aviso ? <p className="text-xs text-ok">{aviso}</p> : null}
 
             <BotonPrincipal type="submit" disabled={cargando} className="w-full">
-              {cargando ? "Procesando…" : modo === "entrar" ? "Entrar" : "Crear cuenta"}
+              {cargando ? "Procesando…" : "Entrar"}
             </BotonPrincipal>
           </form>
-
-          <div className="my-5 flex items-center gap-3 text-[10px] uppercase tracking-widest text-muted-foreground">
-            <span className="h-px flex-1 bg-line" />o<span className="h-px flex-1 bg-line" />
-          </div>
-
-          <button
-            onClick={google}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-surface text-sm font-medium ring-1 ring-line hover:bg-base"
-          >
-            Continuar con Google
-          </button>
-
-          <button
-            onClick={() => {
-              setModo(modo === "entrar" ? "crear" : "entrar");
-              setError(null);
-              setAviso(null);
-            }}
-            className="mt-6 w-full text-center text-xs text-muted-foreground hover:text-ink"
-          >
-            {modo === "entrar" ? "¿No tienes cuenta? Crear una" : "Ya tengo cuenta, iniciar sesión"}
-          </button>
         </div>
       </div>
     </div>

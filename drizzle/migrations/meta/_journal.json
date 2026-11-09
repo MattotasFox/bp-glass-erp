@@ -8,6 +8,13 @@
       "when": 1789442586334,
       "tag": "0000_erp_maquinaria_inicial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794268369184,
+      "tag": "0001_usuario_login",
+      "breakpoints": true
     }
   ]
 }
