@@ -2,7 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/erp/AppShell";
-import { Tarjeta, TituloSeccion, Seleccion, Vacio, Pastilla } from "@/components/erp/ui-bits";
+import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { Tarjeta, TituloSeccion, Seleccion, Vacio, Pastilla, PanelLateral, Campo, Entrada, BotonPrincipal, BotonSecundario } from "@/components/erp/ui-bits";
+import { crearCuenta } from "@/lib/cuentas.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, etiquetaRol, type Rol } from "@/hooks/useAuth";
 import { fecha } from "@/lib/format";
@@ -24,6 +27,20 @@ export const Route = createFileRoute("/_authenticated/usuarios")({
 function Usuarios() {
   const { esAdmin, sesion } = useAuth();
   const qc = useQueryClient();
+  const crearFn = useServerFn(crearCuenta);
+  const vacio = { nombre: "", usuario: "", email: "", clave: "", rol: "tecnico" as Rol };
+  const [panel, setPanel] = useState(false);
+  const [form, setForm] = useState(vacio);
+  const crear = useMutation({
+    mutationFn: () => crearFn({ data: form }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["usuarios"] });
+      toast.success("Cuenta creada");
+      setPanel(false);
+      setForm(vacio);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const { data: usuarios = [], isLoading } = useQuery({
     queryKey: ["usuarios"],
@@ -68,7 +85,45 @@ function Usuarios() {
   }
 
   return (
-    <AppShell titulo="Usuarios y permisos" subtitulo={`${usuarios.length} cuentas con acceso al sistema`}>
+    <AppShell titulo="Usuarios y permisos" subtitulo={`${usuarios.length} cuentas con acceso al sistema`}
+      acciones={<BotonPrincipal onClick={() => setPanel(true)}>+ Crear cuenta</BotonPrincipal>}
+    >
+      <PanelLateral
+        abierto={panel}
+        titulo="Crear cuenta"
+        subtitulo="La persona podrá entrar con su usuario o correo."
+        onCerrar={() => setPanel(false)}
+        pie={
+          <>
+            <BotonSecundario onClick={() => setPanel(false)}>Cancelar</BotonSecundario>
+            <BotonPrincipal type="submit" disabled={crear.isPending} onClick={() => crear.mutate()}>
+              {crear.isPending ? "Creando…" : "Crear cuenta"}
+            </BotonPrincipal>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Campo label="Nombre completo">
+            <Entrada value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
+          </Campo>
+          <Campo label="Nombre de usuario">
+            <Entrada value={form.usuario} placeholder="ej: jperez" onChange={(e) => setForm({ ...form, usuario: e.target.value })} />
+          </Campo>
+          <Campo label="Correo">
+            <Entrada type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </Campo>
+          <Campo label="Contraseña">
+            <Entrada type="text" value={form.clave} onChange={(e) => setForm({ ...form, clave: e.target.value })} />
+          </Campo>
+          <Campo label="Rol">
+            <Seleccion value={form.rol} onChange={(e) => setForm({ ...form, rol: e.target.value as Rol })}>
+              <option value="admin">Administrador</option>
+              <option value="tecnico">Técnico</option>
+              <option value="rrhh">RRHH / Administrativo</option>
+            </Seleccion>
+          </Campo>
+        </div>
+      </PanelLateral>
       <Tarjeta className="overflow-x-auto">
         <div className="border-b border-line px-5 py-4">
           <TituloSeccion>Cuentas registradas</TituloSeccion>
@@ -92,7 +147,7 @@ function Usuarios() {
                   <div className="font-medium">
                     {u.nombre} {u.id === sesion?.userId ? <span className="text-[11px] text-muted-foreground">(tú)</span> : null}
                   </div>
-                  <div className="text-[11px] text-muted-foreground">{u.email}</div>
+                  <div className="text-[11px] text-muted-foreground">{u.usuario ? `@${u.usuario} · ` : ""}{u.email}</div>
                 </td>
                 <td className="px-5 py-3 text-muted-foreground">{fecha(u.creado_en.slice(0, 10))}</td>
                 <td className="px-5 py-3">
