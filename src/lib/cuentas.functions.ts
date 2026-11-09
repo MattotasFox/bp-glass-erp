@@ -26,8 +26,8 @@ export const iniciarSesion = createServerFn({ method: "POST" })
       if (!p?.email) throw new Error("Usuario o contraseña incorrectos");
       email = p.email;
     }
-    const key = process.env.SUPABASE_PUBLISHABLE_KEY!;
-    const cliente = createClient(process.env.SUPABASE_URL!, key, {
+    const key = process.env["SUPABASE_PUBLISHABLE_KEY"]!;
+    const cliente = createClient(process.env["SUPABASE_URL"]!, key, {
       auth: { persistSession: false, autoRefreshToken: false, storage: undefined },
       global: {
         fetch: (input, init) => {
