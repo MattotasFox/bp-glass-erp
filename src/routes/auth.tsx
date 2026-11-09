@@ -59,7 +59,7 @@ function AuthPage() {
           <img src="/assets/logo.png" alt="BP Glass" className="w-full rounded-2xl" />
         </div>
         <p className="font-mono text-[10px] uppercase tracking-widest text-sidebar-foreground/40">
-          Acceso restringido al personal autorizado
+          {"\n"}
         </p>
       </div>
 
@@ -67,7 +67,7 @@ function AuthPage() {
         <div className="w-full max-w-sm">
           <h1 className="font-serif text-3xl tracking-tight">Iniciar sesión</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Ingresa con tu nombre de usuario o correo. Las cuentas las crea el administrador.
+            {"\n"}
           </p>
 
           <form onSubmit={enviar} className="mt-6 space-y-4">
