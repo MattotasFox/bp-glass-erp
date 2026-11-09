@@ -380,18 +380,21 @@ export type Database = {
           email: string
           id: string
           nombre: string
+          usuario: string | null
         }
         Insert: {
           creado_en?: string
           email?: string
           id: string
           nombre?: string
+          usuario?: string | null
         }
         Update: {
           creado_en?: string
           email?: string
           id?: string
           nombre?: string
+          usuario?: string | null
         }
         Relationships: []
       }
