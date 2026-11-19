@@ -3,6 +3,8 @@ import { AppShell } from "@/components/erp/AppShell";
 import { Tarjeta, TituloSeccion, Pastilla, EstadoOrden, Vacio } from "@/components/erp/ui-bits";
 import { useMaquinas, useInventario, useOrdenes, costoOrden } from "@/lib/datos";
 import { money, fecha, diasHasta, nivelMantencion, etiquetaTipoOrden } from "@/lib/format";
+import { useAuth } from "@/hooks/useAuth";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/panel")({
   head: () => ({
@@ -31,6 +33,8 @@ function Kpi({ etiqueta, valor, detalle, tono }: { etiqueta: string; valor: stri
 }
 
 function Panel() {
+  const { esAdmin, esRRHH } = useAuth();
+  const veCostos = esAdmin || esRRHH;
   const { data: maquinas = [] } = useMaquinas();
   const { data: insumos = [] } = useInventario();
   const { data: ordenes = [] } = useOrdenes();
@@ -54,11 +58,13 @@ function Panel() {
 
   return (
     <AppShell titulo="Panel general" subtitulo="Estado operativo de la planta al día de hoy">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className={cn("grid gap-4 md:grid-cols-2", veCostos ? "xl:grid-cols-4" : "xl:grid-cols-3")}>
         <Kpi etiqueta="Máquinas operativas" valor={`${operativas}/${maquinas.length}`} detalle="Equipos disponibles" tono="ok" />
         <Kpi etiqueta="Mantenciones por vencer" valor={String(porVencer.length)} detalle="Vencidas o en menos de 7 días" tono="amber" />
         <Kpi etiqueta="Repuestos bajo mínimo" valor={String(bajoStock.length)} detalle="Requieren reposición" tono="red" />
-        <Kpi etiqueta="Costo del mes" valor={money(costoMes)} detalle="Insumos + mano de obra" tono="clay" />
+        {veCostos ? (
+          <Kpi etiqueta="Costo del mes" valor={money(costoMes)} detalle="Insumos + mano de obra" tono="clay" />
+        ) : null}
       </div>
 
       <div className="mt-5 grid gap-4 xl:grid-cols-2">
