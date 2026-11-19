@@ -15,6 +15,13 @@
       "when": 1794268369184,
       "tag": "0001_usuario_login",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795088727089,
+      "tag": "0002_restringir_lecturas_por_rol",
+      "breakpoints": true
     }
   ]
 }
